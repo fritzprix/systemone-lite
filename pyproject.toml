@@ -31,6 +31,9 @@ viral = [
   "imageio-ffmpeg>=0.5",
   "numpy>=1.26",
 ]
+chess = [
+  "chess>=1.10",
+]
 
 [project.scripts]
 systemone-lite = "systemone_lite.api:main"

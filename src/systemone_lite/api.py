@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from pydantic import ValidationError
 
-from systemone_lite.infer import DEFAULT_MODEL_ID, get_engine
+from systemone_lite.infer import DEFAULT_MODEL_ID, get_engine, set_default_model
 from systemone_lite.schema import SystemOneRequest, SystemOneResponse
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ def main() -> None:
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
+    set_default_model(args.model)
     # Warm the default engine at startup when not reloading.
     if not args.reload:
         get_engine(args.model)

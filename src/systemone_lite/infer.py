@@ -323,8 +323,19 @@ class SystemOneEngine:
 _ENGINE: SystemOneEngine | None = None
 
 
-def get_engine(model_id: str = DEFAULT_MODEL_ID) -> SystemOneEngine:
+def set_default_model(model_id: str) -> None:
+    """Point aliases at a local checkpoint or HF id and clear the singleton."""
+    global DEFAULT_MODEL_ID
+    DEFAULT_MODEL_ID = model_id
+    MODEL_ALIASES["systemone-lite-latest"] = model_id
+    MODEL_ALIASES["systemone-lite-preview"] = model_id
+    reset_engine()
+
+
+def get_engine(model_id: str | None = None) -> SystemOneEngine:
     global _ENGINE
+    if model_id is None:
+        model_id = DEFAULT_MODEL_ID
     resolved = resolve_model_id(model_id)
     if _ENGINE is None or _ENGINE.concrete_model_id != resolved:
         _ENGINE = SystemOneEngine(load_model(model_id), use_prefix_cache=True)

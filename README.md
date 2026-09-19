@@ -120,6 +120,38 @@ Intentionally different:
 OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml)  
 Design notes: [`docs/PROPOSAL.md`](docs/PROPOSAL.md)
 
+## Chess fine-tuning (Stockfish distill)
+
+Train the local System One policy to pick **legal** chess moves by distilling Stockfish.
+
+```bash
+# Ubuntu: sudo apt install stockfish
+# or:     python scripts/download_stockfish.py
+
+pip install -e ".[chess]"
+
+# 1) Build labeled JSONL (state + choice criteria + alias label)
+python scripts/chess_distill_dataset.py --positions 500 --movetime-ms 40
+
+# 2) Fine-tune Qwen2.5-0.5B (GPU recommended)
+python scripts/chess_finetune.py \
+  --data data/chess_distill.jsonl \
+  --out checkpoints/chess-sft \
+  --epochs 2 --batch-size 2 --max-steps 200
+
+# 3) Measure move-choice accuracy
+python scripts/chess_eval.py --data data/chess_distill.jsonl \
+  --model checkpoints/chess-sft --task move --limit 100
+```
+
+Serve the fine-tuned weights:
+
+```bash
+systemone-lite --model checkpoints/chess-sft --port 8000
+```
+
+Labels prefer Stockfish when available (`/usr/games/stockfish` on Ubuntu), otherwise a tactical heuristic.
+
 ## Viral chess demo (local video)
 
 Generates a short vertical clip: board + System One piece/move probabilities.

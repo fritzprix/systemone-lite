@@ -34,3 +34,8 @@ htmlcov/
 
 # Local notes
 *.log
+
+# Training / local binaries
+data/
+checkpoints/
+third_party/
