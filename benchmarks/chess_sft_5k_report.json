@@ -1,0 +1,18 @@
+{
+  "distill": {
+    "positions": 5000,
+    "file": "data/chess_distill_5k.jsonl",
+    "labeler": "stockfish",
+    "wall_clock_min": 8.6
+  },
+  "train": {
+    "steps": 1500,
+    "train_samples": 4500,
+    "wall_clock_min": 4.9
+  },
+  "eval_move_top1": {
+    "baseline": 0.78,
+    "sft": 0.82,
+    "n": 200
+  }
+}
