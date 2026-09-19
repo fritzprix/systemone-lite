@@ -127,6 +127,9 @@ Build a **non-chess** System One distill set for broader typed decisions
 `choice`-shaped rows (noul/score encoded as letter options) compatible with
 `scripts/chess_finetune.py`.
 
+**Hugging Face:** [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)
+(`train` 16.2k / `test` 1.8k / `all` 18k)
+
 ```bash
 # ~2000 episodes × 3 gyms × ~3 questions ≈ 18k samples
 python scripts/build_general_distill.py --episodes 2000 --seed 0
