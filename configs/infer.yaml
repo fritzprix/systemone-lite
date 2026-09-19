@@ -1,0 +1,4 @@
+model: Qwen/Qwen2.5-0.5B-Instruct
+max_length: 4096
+host: 127.0.0.1
+port: 8000

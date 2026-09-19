@@ -1,0 +1,163 @@
+{
+  "project": "systemone-lite",
+  "model_alias": "systemone-lite-latest",
+  "resolved_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "device": {
+    "torch_cuda": true,
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "gpu_mem_total_gb": 11.62,
+    "device_used": "cuda"
+  },
+  "method": {
+    "warmup": 3,
+    "runs": 15,
+    "timer": "time.perf_counter around in-process system_one()",
+    "includes": "tokenize + batched forward + assemble (no HTTP)"
+  },
+  "cases": [
+    {
+      "name": "short_1q",
+      "n_questions": 1,
+      "state_chars": 73,
+      "runs": 15,
+      "warmup": 3,
+      "input_tokens_last": 66,
+      "latency_ms": {
+        "min": 9.89,
+        "p50": 10.68,
+        "p95": 11.24,
+        "max": 11.27,
+        "mean": 10.61
+      },
+      "throughput": {
+        "requests_per_sec": 94.23,
+        "questions_per_sec": 94.23
+      }
+    },
+    {
+      "name": "short_3q",
+      "n_questions": 3,
+      "state_chars": 73,
+      "runs": 15,
+      "warmup": 3,
+      "input_tokens_last": 160,
+      "latency_ms": {
+        "min": 24.02,
+        "p50": 24.41,
+        "p95": 25.16,
+        "max": 25.28,
+        "mean": 24.52
+      },
+      "throughput": {
+        "requests_per_sec": 40.78,
+        "questions_per_sec": 122.34
+      }
+    },
+    {
+      "name": "short_8q",
+      "n_questions": 8,
+      "state_chars": 73,
+      "runs": 15,
+      "warmup": 3,
+      "input_tokens_last": 394,
+      "latency_ms": {
+        "min": 38.6,
+        "p50": 38.99,
+        "p95": 40.09,
+        "max": 40.31,
+        "mean": 39.25
+      },
+      "throughput": {
+        "requests_per_sec": 25.48,
+        "questions_per_sec": 203.84
+      }
+    },
+    {
+      "name": "short_13q",
+      "n_questions": 13,
+      "state_chars": 73,
+      "runs": 15,
+      "warmup": 3,
+      "input_tokens_last": 625,
+      "latency_ms": {
+        "min": 57.59,
+        "p50": 58.35,
+        "p95": 59.02,
+        "max": 59.11,
+        "mean": 58.37
+      },
+      "throughput": {
+        "requests_per_sec": 17.13,
+        "questions_per_sec": 222.7
+      }
+    },
+    {
+      "name": "long_3q",
+      "n_questions": 3,
+      "state_chars": 6274,
+      "runs": 15,
+      "warmup": 3,
+      "input_tokens_last": 1361,
+      "latency_ms": {
+        "min": 97.88,
+        "p50": 98.79,
+        "p95": 99.49,
+        "max": 99.69,
+        "mean": 98.84
+      },
+      "throughput": {
+        "requests_per_sec": 10.12,
+        "questions_per_sec": 30.35
+      }
+    },
+    {
+      "name": "long_13q",
+      "n_questions": 13,
+      "state_chars": 6274,
+      "runs": 15,
+      "warmup": 3,
+      "input_tokens_last": 1826,
+      "latency_ms": {
+        "min": 144.25,
+        "p50": 145.04,
+        "p95": 145.71,
+        "max": 145.75,
+        "mean": 145.03
+      },
+      "throughput": {
+        "requests_per_sec": 6.9,
+        "questions_per_sec": 89.64
+      }
+    }
+  ],
+  "jev_published": {
+    "source": "TypeSafe public claims (docs/blog; not measured on this machine)",
+    "e2e_latency_ms": {
+      "typical_low": 70,
+      "typical_high": 500
+    },
+    "input_price_per_mtok_usd": 0.042,
+    "notes": [
+      "Measured from TypeSafe servers (often cited from US West Coast clients).",
+      "Includes their parallel sampler; network RTT applies for remote callers.",
+      "Output tokens billed as free / too cheap to meter."
+    ]
+  },
+  "comparison_short_3q": {
+    "our_p50_ms": 24.41,
+    "jev_claimed_range_ms": [
+      70,
+      500
+    ],
+    "vs_jev_low_x": 0.35,
+    "vs_jev_high_x": 0.05,
+    "interpretation": "faster_than_jev_high"
+  },
+  "caveats": [
+    "Jev numbers are vendor-published ranges, not live API calls from this host.",
+    "No TYPESAFE_API_KEY available for head-to-head RTT measurement.",
+    "Local bench excludes HTTP; add ~1\u20135ms locally or tens of ms over WAN for fair E2E.",
+    "Accuracy is not measured here \u2014 only latency/throughput.",
+    "GPU contention / first-load excluded after warmup."
+  ]
+}

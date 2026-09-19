@@ -1,0 +1,163 @@
+{
+  "project": "systemone-lite",
+  "model_alias": "systemone-lite-latest",
+  "resolved_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "device": {
+    "torch_cuda": true,
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "gpu_mem_total_gb": 11.62,
+    "device_used": "cuda"
+  },
+  "method": {
+    "warmup": 5,
+    "runs": 30,
+    "timer": "time.perf_counter around in-process system_one()",
+    "includes": "tokenize + batched forward + assemble (no HTTP)"
+  },
+  "cases": [
+    {
+      "name": "short_1q",
+      "n_questions": 1,
+      "state_chars": 73,
+      "runs": 30,
+      "warmup": 5,
+      "input_tokens_last": 66,
+      "latency_ms": {
+        "min": 9.13,
+        "p50": 9.41,
+        "p95": 10.52,
+        "max": 11.04,
+        "mean": 9.6
+      },
+      "throughput": {
+        "requests_per_sec": 104.21,
+        "questions_per_sec": 104.21
+      }
+    },
+    {
+      "name": "short_3q",
+      "n_questions": 3,
+      "state_chars": 73,
+      "runs": 30,
+      "warmup": 5,
+      "input_tokens_last": 202,
+      "latency_ms": {
+        "min": 17.35,
+        "p50": 17.5,
+        "p95": 18.41,
+        "max": 18.98,
+        "mean": 17.6
+      },
+      "throughput": {
+        "requests_per_sec": 56.83,
+        "questions_per_sec": 170.48
+      }
+    },
+    {
+      "name": "short_8q",
+      "n_questions": 8,
+      "state_chars": 73,
+      "runs": 30,
+      "warmup": 5,
+      "input_tokens_last": 541,
+      "latency_ms": {
+        "min": 37.21,
+        "p50": 37.55,
+        "p95": 38.98,
+        "max": 39.29,
+        "mean": 37.71
+      },
+      "throughput": {
+        "requests_per_sec": 26.52,
+        "questions_per_sec": 212.15
+      }
+    },
+    {
+      "name": "short_13q",
+      "n_questions": 13,
+      "state_chars": 73,
+      "runs": 30,
+      "warmup": 5,
+      "input_tokens_last": 877,
+      "latency_ms": {
+        "min": 57.27,
+        "p50": 57.55,
+        "p95": 59.28,
+        "max": 59.41,
+        "mean": 57.89
+      },
+      "throughput": {
+        "requests_per_sec": 17.27,
+        "questions_per_sec": 224.55
+      }
+    },
+    {
+      "name": "long_3q",
+      "n_questions": 3,
+      "state_chars": 6274,
+      "runs": 30,
+      "warmup": 5,
+      "input_tokens_last": 3805,
+      "latency_ms": {
+        "min": 234.8,
+        "p50": 237.27,
+        "p95": 238.04,
+        "max": 238.37,
+        "mean": 237.16
+      },
+      "throughput": {
+        "requests_per_sec": 4.22,
+        "questions_per_sec": 12.65
+      }
+    },
+    {
+      "name": "long_13q",
+      "n_questions": 13,
+      "state_chars": 6274,
+      "runs": 30,
+      "warmup": 5,
+      "input_tokens_last": 16490,
+      "latency_ms": {
+        "min": 1013.49,
+        "p50": 1023.47,
+        "p95": 1032.9,
+        "max": 1036.29,
+        "mean": 1025.23
+      },
+      "throughput": {
+        "requests_per_sec": 0.98,
+        "questions_per_sec": 12.68
+      }
+    }
+  ],
+  "jev_published": {
+    "source": "TypeSafe public claims (docs/blog; not measured on this machine)",
+    "e2e_latency_ms": {
+      "typical_low": 70,
+      "typical_high": 500
+    },
+    "input_price_per_mtok_usd": 0.042,
+    "notes": [
+      "Measured from TypeSafe servers (often cited from US West Coast clients).",
+      "Includes their parallel sampler; network RTT applies for remote callers.",
+      "Output tokens billed as free / too cheap to meter."
+    ]
+  },
+  "comparison_short_3q": {
+    "our_p50_ms": 17.5,
+    "jev_claimed_range_ms": [
+      70,
+      500
+    ],
+    "vs_jev_low_x": 0.25,
+    "vs_jev_high_x": 0.04,
+    "interpretation": "faster_than_jev_high"
+  },
+  "caveats": [
+    "Jev numbers are vendor-published ranges, not live API calls from this host.",
+    "No TYPESAFE_API_KEY available for head-to-head RTT measurement.",
+    "Local bench excludes HTTP; add ~1\u20135ms locally or tens of ms over WAN for fair E2E.",
+    "Accuracy is not measured here \u2014 only latency/throughput.",
+    "GPU contention / first-load excluded after warmup."
+  ]
+}
