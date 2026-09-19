@@ -20,7 +20,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from systemone_lite import SystemOneClient, choice
-from systemone_lite.infer import reset_engine
+from systemone_lite.infer import reset_engine, set_default_model
 from systemone_lite.stub import StubEngine
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -441,40 +441,66 @@ def run_demo(
     plies: int,
     fps: int,
     use_stub: bool,
+    model: str,
     out_mp4: Path,
     out_gif: Path | None,
+    hold_title: float,
+    hold_think: float,
+    hold_decide: float,
+    hold_after: float,
+    hold_end: float,
 ) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     reset_engine()
     if use_stub:
         client = SystemOneClient(engine=StubEngine())
+        model_label = "stub"
     else:
-        client = SystemOneClient(model="systemone-lite-latest")
+        set_default_model(model)
+        client = SystemOneClient(model=model)
+        model_label = Path(model).name if "/" in model or model.startswith(".") else model
 
     board = chess.Board()
     frames: list[Image.Image] = []
 
-    hold(frames, frame_title("0.5B model · legal criteria · prefix KV cache"), 2.2, fps)
+    hold(
+        frames,
+        frame_title(f"{model_label}  ·  legal criteria  ·  both sides System One"),
+        hold_title,
+        fps,
+    )
 
     for ply in range(1, plies + 1):
         if board.is_game_over():
             break
 
         thinking = frame_turn(board, ply=ply, move=None, debug=None, phase="thinking")
-        hold(frames, thinking, 0.55, fps)
+        hold(frames, thinking, hold_think, fps)
 
         t0 = time.perf_counter()
         move, debug = decide_move(client, board)
         debug["latency_hint_ms"] = round((time.perf_counter() - t0) * 1000)
 
         decide = frame_turn(board, ply=ply, move=move, debug=debug, phase="decide")
-        hold(frames, decide, 1.35, fps)
+        hold(frames, decide, hold_decide, fps)
 
         board.push(move)
         after = frame_turn(board, ply=ply, move=move, debug=debug, phase="after")
-        hold(frames, after, 0.85, fps)
+        hold(frames, after, hold_after, fps)
 
-    hold(frames, frame_end(), 2.4, fps)
+    # Result banner if game ended early.
+    if board.is_game_over():
+        end = frame_end()
+        draw = ImageDraw.Draw(end)
+        draw.text(
+            (80, 420),
+            f"Result: {board.result()}  ({board.fullmove_number} moves)",
+            font=FONT_SUB,
+            fill=(255, 200, 120),
+        )
+        hold(frames, end, hold_end, fps)
+    else:
+        hold(frames, frame_end(), hold_end, fps)
 
     # Write MP4
     out_mp4.parent.mkdir(parents=True, exist_ok=True)
@@ -492,26 +518,31 @@ def run_demo(
     finally:
         writer.close()
 
+    duration_s = len(frames) / max(fps, 1)
+    print(f"wrote {out_mp4} ({len(frames)} frames @ {fps}fps ≈ {duration_s:.1f}s)")
+
     if out_gif is not None:
-        # Lighter GIF for social preview (downsample + fewer frames)
         gif_frames = []
-        step = max(1, fps // 6)
+        # Keep GIF under ~200 frames for shareability.
+        step = max(1, len(frames) // 180)
         for i, frame in enumerate(frames):
             if i % step != 0:
                 continue
             small = frame.resize((540, 675), Image.Resampling.LANCZOS)
             gif_frames.append(np.asarray(small.convert("RGB")))
-        imageio.mimsave(out_gif, gif_frames, fps=max(4, fps // step), loop=0)
-
-    print(f"wrote {out_mp4} ({len(frames)} frames @ {fps}fps)")
-    if out_gif:
-        print(f"wrote {out_gif}")
+        imageio.mimsave(out_gif, gif_frames, fps=max(4, fps // max(step, 1)), loop=0)
+        print(f"wrote {out_gif} ({len(gif_frames)} frames)")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Viral chess demo for systemone-lite")
-    parser.add_argument("--plies", type=int, default=8, help="Half-moves to play")
+    parser.add_argument("--plies", type=int, default=20, help="Half-moves to play")
     parser.add_argument("--fps", type=int, default=12)
+    parser.add_argument(
+        "--model",
+        default="checkpoints/chess-sft",
+        help="HF id or local checkpoint (default: fine-tuned chess-sft)",
+    )
     parser.add_argument(
         "--stub",
         action="store_true",
@@ -528,14 +559,25 @@ def main() -> None:
         default=OUT_DIR / "systemone_lite_chess.gif",
     )
     parser.add_argument("--no-gif", action="store_true")
+    parser.add_argument("--hold-title", type=float, default=3.0)
+    parser.add_argument("--hold-think", type=float, default=0.85)
+    parser.add_argument("--hold-decide", type=float, default=2.1)
+    parser.add_argument("--hold-after", type=float, default=1.35)
+    parser.add_argument("--hold-end", type=float, default=3.5)
     args = parser.parse_args()
 
     run_demo(
         plies=args.plies,
         fps=args.fps,
         use_stub=args.stub,
+        model=args.model,
         out_mp4=args.mp4,
         out_gif=None if args.no_gif else args.gif,
+        hold_title=args.hold_title,
+        hold_think=args.hold_think,
+        hold_decide=args.hold_decide,
+        hold_after=args.hold_after,
+        hold_end=args.hold_end,
     )
 
 

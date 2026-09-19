@@ -154,23 +154,24 @@ Labels prefer Stockfish when available (`/usr/games/stockfish` on Ubuntu), other
 
 ## Viral chess demo (local video)
 
-Generates a short vertical clip: board + System One piece/move probabilities.
+Generates a longer vertical clip with the **fine-tuned** chess checkpoint by default:
 
 ```bash
 pip install -e ".[viral]"
-python scripts/chess_viral_demo.py --plies 8 --fps 12
-# outputs:
-#   benchmarks/viral/systemone_lite_chess.mp4
-#   benchmarks/viral/systemone_lite_chess.gif
+
+# uses checkpoints/chess-sft if present (~20 plies, ~90s)
+python scripts/chess_viral_demo.py --plies 20 --fps 12 \
+  --model checkpoints/chess-sft
+
+# base model instead:
+# python scripts/chess_viral_demo.py --model Qwen/Qwen2.5-0.5B-Instruct
 ```
 
-Dry-run without downloading weights:
+Outputs:
+- `benchmarks/viral/systemone_lite_chess.mp4`
+- `benchmarks/viral/systemone_lite_chess.gif`
 
-```bash
-python scripts/chess_viral_demo.py --stub --plies 4
-```
-
-Each turn is an iterate loop: **choice(piece)** → **choice(destination)**, with `criteria` restricted to **legal moves only** (`python-chess`). Good for screen recordings / Shorts / Reels. Strength is toy-level unless you fine-tune.
+Dry-run without weights: `python scripts/chess_viral_demo.py --stub --plies 6`
 
 ## Latency (indicative)
 
