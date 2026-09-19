@@ -40,6 +40,11 @@ def main() -> None:
     parser.add_argument("--repo", default=DEFAULT_REPO)
     parser.add_argument("--train", type=Path, default=ROOT / "data" / "general_train.jsonl")
     parser.add_argument("--test", type=Path, default=ROOT / "data" / "general_eval.jsonl")
+    parser.add_argument(
+        "--test-hard",
+        type=Path,
+        default=ROOT / "data" / "general_eval_hard.jsonl",
+    )
     parser.add_argument("--all", type=Path, default=ROOT / "data" / "general_distill.jsonl")
     parser.add_argument("--private", action="store_true")
     args = parser.parse_args()
@@ -56,13 +61,14 @@ def main() -> None:
             "meta": Value("string"),
         }
     )
-    ds = DatasetDict(
-        {
-            "train": Dataset.from_list(load_jsonl(args.train), features=features),
-            "test": Dataset.from_list(load_jsonl(args.test), features=features),
-            "all": Dataset.from_list(load_jsonl(args.all), features=features),
-        }
-    )
+    splits = {
+        "train": Dataset.from_list(load_jsonl(args.train), features=features),
+        "test": Dataset.from_list(load_jsonl(args.test), features=features),
+        "test_hard": Dataset.from_list(load_jsonl(args.test_hard), features=features),
+        # HF reserves the name "all"; use "full" for train+iid pool.
+        "full": Dataset.from_list(load_jsonl(args.all), features=features),
+    }
+    ds = DatasetDict(splits)
     ds.push_to_hub(args.repo, private=args.private)
     print(f"pushed {args.repo}: { {k: len(v) for k, v in ds.items()} }")
 

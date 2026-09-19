@@ -14,6 +14,7 @@ TOPICS = [
     ("raise_prices", "We should raise prices 10%"),
     ("rewrite_backend", "We should rewrite the backend in Rust"),
     ("hire_junior", "We should hire more junior engineers"),
+    ("open_source_core", "We should open-source the core library"),
 ]
 
 CLAIMS = {
@@ -77,25 +78,43 @@ CLAIMS = {
             ("Juniors ask too many questions", False),
         ],
     },
+    "open_source_core": {
+        "pro": [
+            ("Inbound PRs already fix bugs we lack time for", True),
+            ("Design partners ask for source escrow", True),
+            ("Open source is always good actually", False),
+        ],
+        "con": [
+            ("Core contains proprietary scoring IP", True),
+            ("Support load estimates exceed current headcount", True),
+            ("Competitors will steal our vibes", False),
+        ],
+    },
 }
 
 WIN_INSTR = [
     "Which side is better supported by evidence? Reply with one option letter.",
     "Given the claims and evidence flags, who should win the debate? One letter.",
+    "Apply the rubric: hard evidence beats vibes. Pick the winning side letter.",
+    "Who wins under the stated evidence policy? One Criteria letter.",
 ]
 
 ENOUGH_INSTR = [
     "Is there enough hard evidence to decide confidently? Reply with one letter.",
     "Do we have sufficient evidence-backed claims (not vibes)? Reply with one letter.",
+    "Evidence sufficiency check — yes or no via option letter.",
 ]
 
 CONF_INSTR = [
     "How confident should we be in the judgment? Reply with one level letter.",
     "Rate decision confidence from the evidence balance. One letter.",
+    "Confidence score for this adjudication — pick one Criteria letter.",
 ]
 
 
-def generate_debate_episode(rng: random.Random) -> list[DistillSample]:
+def generate_debate_episode(
+    rng: random.Random, *, hard: bool = False
+) -> list[DistillSample]:
     topic_id, question = rng.choice(TOPICS)
     pack = CLAIMS[topic_id]
     n_pro = rng.randint(1, 3)
@@ -103,23 +122,40 @@ def generate_debate_episode(rng: random.Random) -> list[DistillSample]:
     pro = rng.sample(pack["pro"], n_pro)
     con = rng.sample(pack["con"], n_con)
 
-    pro_ev = sum(1 for _, hard in pro if hard)
-    con_ev = sum(1 for _, hard in con if hard)
-    pro_soft = sum(1 for _, hard in pro if not hard)
-    con_soft = sum(1 for _, hard in con if not hard)
+    pro_ev = sum(1 for _, hard_ev in pro if hard_ev)
+    con_ev = sum(1 for _, hard_ev in con if hard_ev)
+    pro_soft = sum(1 for _, hard_ev in pro if not hard_ev)
+    con_soft = sum(1 for _, hard_ev in con if not hard_ev)
 
-    state: dict[str, Any] = {
-        "question": question,
-        "side_a": {
-            "label": "support",
-            "claims": [{"text": t, "hard_evidence": h} for t, h in pro],
-        },
-        "side_b": {
-            "label": "oppose",
-            "claims": [{"text": t, "hard_evidence": h} for t, h in con],
-        },
-        "rubric": "Prefer hard evidence over vibes; break ties toward the side with more hard evidence.",
-    }
+    if hard and rng.random() < 0.45:
+        state: dict[str, Any] = {
+            "motion": question,
+            "affirmative": {
+                "name": "support",
+                "points": [{"claim": t, "evidence": h} for t, h in pro],
+            },
+            "negative": {
+                "name": "oppose",
+                "points": [{"claim": t, "evidence": h} for t, h in con],
+            },
+            "scoring": "Count hard evidence first; soft claims only break ties.",
+        }
+    else:
+        state = {
+            "question": question,
+            "side_a": {
+                "label": "support",
+                "claims": [{"text": t, "hard_evidence": h} for t, h in pro],
+            },
+            "side_b": {
+                "label": "oppose",
+                "claims": [{"text": t, "hard_evidence": h} for t, h in con],
+            },
+            "rubric": (
+                "Prefer hard evidence over vibes; break ties toward the side "
+                "with more hard evidence."
+            ),
+        }
 
     if pro_ev > con_ev:
         winner = "support"
@@ -130,18 +166,27 @@ def generate_debate_episode(rng: random.Random) -> list[DistillSample]:
     else:
         winner = rng.choice(["support", "oppose"])
 
+    if hard and rng.random() < 0.5:
+        win_opts = {
+            "support": "Affirmative / support",
+            "oppose": "Negative / oppose",
+        }
+    else:
+        win_opts = {
+            "support": "Side A — support the proposal",
+            "oppose": "Side B — oppose the proposal",
+        }
+
     samples = [
         choice_sample(
             task="debate.winner",
             state=state,
             instructions=paraphrase(rng, WIN_INSTR),
-            options={
-                "support": "Side A — support the proposal",
-                "oppose": "Side B — oppose the proposal",
-            },
+            options=win_opts,
             label_key=winner,
             meta={"gym": "debate_judge", "pro_ev": pro_ev, "con_ev": con_ev},
             rng=rng,
+            hard=hard,
         )
     ]
 
@@ -158,6 +203,7 @@ def generate_debate_episode(rng: random.Random) -> list[DistillSample]:
             label_key="yes" if enough else "no",
             meta={"gym": "debate_judge", "schema_hint": "noul"},
             rng=rng,
+            hard=hard,
         )
     )
 
@@ -181,6 +227,7 @@ def generate_debate_episode(rng: random.Random) -> list[DistillSample]:
             label_key=conf,
             meta={"gym": "debate_judge", "schema_hint": "score"},
             rng=rng,
+            hard=hard,
         )
     )
     return samples

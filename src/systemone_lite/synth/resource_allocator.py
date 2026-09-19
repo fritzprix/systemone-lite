@@ -19,67 +19,92 @@ REQUEST_POOL = [
     ("hiring_bonus", "Hiring referral bonuses", 50, 1),
     ("cdn_upgrade", "CDN capacity upgrade", 55, 2),
     ("docs_rewrite", "Docs rewrite contractor", 35, 0),
+    ("oncall_stipend", "On-call stipend top-up", 45, 2),
+    ("design_sprint", "Design sprint facilitator", 25, 0),
 ]
 
 FUND_INSTR = [
     "Which single request should be funded next given the budget? Reply with one letter.",
     "Pick the best request to fund now. Prefer high urgency that fits the remaining budget.",
+    "Select the next funding target under the policy. One option letter.",
+    "Given budget_remaining and urgencies, which request wins? One letter.",
 ]
 
 CAN_ALL_INSTR = [
     "Can we fund ALL remaining requests within the budget? Reply with one letter.",
     "Is the budget enough to approve every request? Reply with one option letter.",
+    "Would summing all costs fit under budget_remaining? Answer with one letter.",
 ]
 
 PRESSURE_INSTR = [
     "Rate overall budget pressure. Reply with one level letter.",
     "How constrained is the budget relative to demand? Pick one letter.",
+    "Budget tightness score — choose one Criteria letter.",
 ]
 
 
-def generate_allocator_episode(rng: random.Random) -> list[DistillSample]:
-    n = rng.randint(3, 5)
+def generate_allocator_episode(
+    rng: random.Random, *, hard: bool = False
+) -> list[DistillSample]:
+    n = rng.randint(3, 6 if hard else 5)
     picked = rng.sample(REQUEST_POOL, n)
     requests = []
     for key, title, cost, urg in picked:
-        # Jitter costs slightly.
-        c = max(5, cost + rng.randint(-10, 10))
-        requests.append(
-            {
-                "id": key,
-                "title": title,
-                "cost": c,
-                "urgency": urg,
-            }
-        )
+        c = max(5, cost + rng.randint(-15 if hard else -10, 15 if hard else 10))
+        u = urg
+        if hard and rng.random() < 0.2:
+            u = max(0, min(3, urg + rng.choice([-1, 1])))
+        requests.append({"id": key, "title": title, "cost": c, "urgency": u})
 
     total_need = sum(r["cost"] for r in requests)
-    # Budget sometimes tight, sometimes loose.
     if rng.random() < 0.5:
         budget = rng.randint(max(r["cost"] for r in requests), total_need + 20)
     else:
         budget = rng.randint(total_need, total_need + 80)
 
-    state: dict[str, Any] = {
-        "budget_remaining": budget,
-        "currency": "USD",
-        "requests": requests,
-        "policy": "Fund at most one request per step; prefer higher urgency among affordable.",
-    }
+    policy = (
+        "Fund at most one request per step; prefer higher urgency among affordable."
+        if not hard
+        else "Single grant per step. Max urgency among cost<=budget; ties → cheaper, then id."
+    )
+    if hard and rng.random() < 0.4:
+        state: dict[str, Any] = {
+            "wallet": {"remaining": budget, "ccy": "USD"},
+            "queue": requests,
+            "rules": policy,
+        }
+    else:
+        state = {
+            "budget_remaining": budget,
+            "currency": "USD",
+            "requests": requests,
+            "policy": policy,
+        }
 
     affordable = [r for r in requests if r["cost"] <= budget]
     if not affordable:
-        # Force at least one affordable for a valid choice label.
         cheapest = min(requests, key=lambda r: r["cost"])
         budget = cheapest["cost"]
-        state["budget_remaining"] = budget
+        wallet = state.get("wallet")
+        if isinstance(wallet, dict):
+            wallet["remaining"] = budget
+        else:
+            state["budget_remaining"] = budget
         affordable = [cheapest]
 
     def rank(r: dict[str, Any]) -> tuple[int, int, str]:
         return (r["urgency"], -r["cost"], r["id"])
 
     best = max(affordable, key=rank)
-    options = {r["id"]: f"{r['title']} (cost={r['cost']}, urgency={r['urgency']})" for r in requests}
+    if hard and rng.random() < 0.5:
+        options = {
+            r["id"]: f"{r['title']} | ${r['cost']} | urg={r['urgency']}" for r in requests
+        }
+    else:
+        options = {
+            r["id"]: f"{r['title']} (cost={r['cost']}, urgency={r['urgency']})"
+            for r in requests
+        }
 
     samples = [
         choice_sample(
@@ -90,6 +115,7 @@ def generate_allocator_episode(rng: random.Random) -> list[DistillSample]:
             label_key=best["id"],
             meta={"gym": "resource_allocator"},
             rng=rng,
+            hard=hard,
         )
     ]
 
@@ -106,6 +132,7 @@ def generate_allocator_episode(rng: random.Random) -> list[DistillSample]:
             label_key="yes" if can_all else "no",
             meta={"gym": "resource_allocator", "schema_hint": "noul"},
             rng=rng,
+            hard=hard,
         )
     )
 
@@ -129,6 +156,7 @@ def generate_allocator_episode(rng: random.Random) -> list[DistillSample]:
             label_key=pressure,
             meta={"gym": "resource_allocator", "schema_hint": "score", "ratio": ratio},
             rng=rng,
+            hard=hard,
         )
     )
     return samples

@@ -1,78 +1,134 @@
 # systemone-lite
 
-> A **toy / research project** that approximates TypeSafe-style **System One** decisions
-> with a small open model you can run **locally**.
->
-> Not affiliated with [TypeSafe AI](https://typesafe.ai) or Jev. Not a drop-in production replacement.
+Local approximation of the public TypeSafe **System One** JSON API
+(`POST /v1/systemone`), backed by a small causal LM.
 
-`systemone-lite` exposes a **Jev-shaped** HTTP API (`POST /v1/systemone`): you send application `state` plus typed questions (`noul` / `choice` / `score`), and get back constrained answers with probabilities.
+Not affiliated with [TypeSafe AI](https://typesafe.ai) or Jev. Not a production
+replacement.
 
-Under the hood it is **not** Jev’s proprietary parallel sampler or RLCD stack. It is a lightweight causal LM (`Qwen/Qwen2.5-0.5B-Instruct` by default) that:
+**Inference:** shared state prefix (KV cache) + batched per-question next-token
+scoring over **option token ids only** (softmax restricted to the question’s
+criteria / yes–no / score levels). No autoregressive JSON string generation.
 
-1. Builds a shared state prefix + per-question templates  
-2. Scores option tokens with a single next-token step (batched)  
-3. Reuses a **prefix KV cache** so long state is encoded once across questions  
+**Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoint:
+[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
 
-Think of it as an educational / hackable **local System One sandbox**, useful for API prototyping, latency experiments, and learning how typed decision APIs feel in application code.
+## Measured results
+
+All figures below are from this repo’s scripts. Reproduce paths are linked.
+
+### API surface
+
+Compatible with the public System One **request/response shape**
+([TypeSafe API reference](https://docs.typesafe.ai/api.md)):
+
+- `POST /v1/systemone`
+- `state` + `questions` map: `noul` | `choice` | `score`
+- `answers` + `usage.input_tokens` / `usage.output_tokens`
+
+Intentionally different: model ids, accuracy/calibration, auth, and
+`confidence` formula `(p_max - 1/n)/(1 - 1/n)`.
+
+### Latency (in-process, no HTTP)
+
+Hardware: **NVIDIA RTX 3060** (12 GB). Model: `Qwen/Qwen2.5-0.5B-Instruct`.
+Prefix KV cache enabled. Warmup excluded.
+Source: [`benchmarks/latency_prefix_cache.json`](benchmarks/latency_prefix_cache.json)
+(`scripts/bench_latency.py`).
+
+| Case | Questions | State chars | p50 (ms) | p95 (ms) |
+|---|---:|---:|---:|---:|
+| short_1q | 1 | 73 | 10.7 | 11.2 |
+| short_3q | 3 | 73 | 24.4 | 25.2 |
+| short_8q | 8 | 73 | 39.0 | 40.1 |
+| short_13q | 13 | 73 | 58.4 | — |
+| long_3q | 3 | 6274 | 98.8 | — |
+| long_13q | 13 | 6274 | 145.0 | — |
+
+TypeSafe’s public materials describe Jev end-to-end latency roughly in the
+**70–500 ms** range (their cloud + network; not measured here). That band is
+not a controlled comparison: different hardware, model, and no shared eval set.
+
+```bash
+python scripts/bench_latency.py --warmup 5 --runs 20
+```
+
+### General SFT accuracy (option top-1)
+
+Dataset: [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)
+(ticket / alloc / debate gyms). Train: 32 400 rows, 1 epoch, batch size 3,
+gym-stratified batches (10 800 steps; equal gym exposure).
+Checkpoint: [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
+
+| Split | n | Base 0.5B | SFT | Δ |
+|---|---:|---:|---:|---:|
+| iid (`test`) | 3600 | 0.439 | 0.679 | +0.240 |
+| hard (`test_hard`) | 5400 | 0.427 | 0.652 | +0.225 |
+
+Hard split: alternate state layouts, option subsets, paraphrases (same label
+rules). Per-task JSON:
+[`benchmarks/general_base_eval.json`](benchmarks/general_base_eval.json),
+[`benchmarks/general_sft_eval.json`](benchmarks/general_sft_eval.json),
+[`benchmarks/general_sft_eval_hard.json`](benchmarks/general_sft_eval_hard.json).
+
+Selected iid tasks (SFT): `ticket.route` 1.000, `alloc.fund_next` 0.980,
+`ticket.needs_human` 0.775. Near-base: `debate.winner` 0.493,
+`debate.enough_evidence` 0.460.
+
+### Chess (no positive transfer from general SFT)
+
+Move-choice top-1 on `data/chess_eval_5k.jsonl` (n=500).
+Source: [`benchmarks/chess_transfer_from_general.json`](benchmarks/chess_transfer_from_general.json).
+
+| Checkpoint | Accuracy |
+|---|---:|
+| Base `Qwen2.5-0.5B-Instruct` | 0.790 |
+| General SFT (`systemone-lite-0.5b`) | 0.458 |
+| Chess SFT (`checkpoints/chess-sft`, local) | 0.834 |
+
+General and chess checkpoints are separate; mixing domains in one weight file
+is not claimed to transfer.
 
 ## Resources
 
-| Resource | Link | What it is |
-|---|---|---|
-| **GitHub** | [fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) | Code, API server, synth gyms, train/eval scripts |
-| **HF dataset** | [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general) | Multi-gym typed-decision distill (`train` 16.2k / `test` 1.8k / `all` 18k) |
-| **HF model** | [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b) | Qwen2.5-0.5B fine-tuned on that dataset (general SFT, not chess) |
-| **Base model** | [`Qwen/Qwen2.5-0.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) | Default zero-shot backbone (Apache-2.0) |
-| **System One API (reference)** | [TypeSafe docs](https://docs.typesafe.ai/api.md) | Public JSON contract we approximate — not our product |
-| **Design notes** | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) | Architecture decisions (batched AR, not MLM) |
-
-**How the HF artifacts fit together**
-
-```text
-Qwen2.5-0.5B-Instruct          ← default server weights (zero-shot)
-        │
-        │  SFT on systemone-lite-general
-        ▼
-dwidlee/systemone-lite-0.5b    ← better ticket/alloc/debate choices
-```
-
-- Prefer **`systemone-lite-0.5b`** when you want stronger routing / allocation / debate decisions out of the box.  
-- Keep the **base Qwen** (or a local `checkpoints/chess-sft`) for chess demos — the general SFT is a **separate** checkpoint and does not claim chess transfer.  
-- Chess weights are **local-only** for now (`checkpoints/chess-sft`); regenerate with the Stockfish pipeline below if needed.
+| Resource | Link |
+|---|---|
+| Code | [github.com/fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) |
+| Dataset | [dwidlee/systemone-lite-general](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
+| General SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
+| Base model | [Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) |
+| System One API (reference) | [docs.typesafe.ai/api.md](https://docs.typesafe.ai/api.md) |
+| Design notes | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
 
 ```bash
-# Use the published general SFT checkpoint
 systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
 
-# Or load the dataset without regenerating locally
 python - <<'PY'
 from datasets import load_dataset
-ds = load_dataset("dwidlee/systemone-lite-general")
-print(ds)
+print(load_dataset("dwidlee/systemone-lite-general"))
 PY
 ```
 
 ## Why this exists
 
-- **Local-first:** run on your GPU/CPU; no TypeSafe account required for development  
-- **Wire-compatible shape:** same request/response ideas as the [public System One API](https://docs.typesafe.ai/api.md) so client code can be sketched offline  
-- **Tiny backbone:** start with ~0.5B params; swap models later if you want  
-- **Honest scope:** accuracy and calibration will not match a frontier System One product out of the box—especially before fine-tuning  
+- Run System One–shaped clients against a local server (no TypeSafe account)
+- Inspect batched option scoring and prefix KV behavior
+- Fine-tune on synthetic typed-decision gyms
 
 ## What it is / isn’t
 
 | Is | Isn’t |
 |---|---|
-| Toy approximation of System One **API contracts** | A clone of Jev’s model, sampler, or training |
-| Local FastAPI server + Python client | Hosted SaaS or calibrated enterprise model |
-| Batched AR + option logits + prefix KV cache | BERT/MLM multi-mask “parallel MLM” |
+| Approximation of System One **JSON contracts** | Clone of Jev weights, sampler, or RLCD |
+| Local FastAPI + Python client | Hosted SaaS |
+| Batched next-token + option-restricted softmax + prefix KV | Autoregressive JSON generation; BERT MLM |
 | MIT open source | Affiliated with or endorsed by TypeSafe |
 
 ## Requirements
 
 - Python 3.11+  
 - `torch`, `transformers`, `fastapi` (see `pyproject.toml`)  
-- GPU recommended (smoke-tested on RTX 3060); CPU works but slower  
+- GPU recommended (figures above: RTX 3060); CPU works, slower  
 
 ## Install
 
@@ -109,7 +165,7 @@ curl -s http://127.0.0.1:8000/v1/systemone \
   -d @tests/fixtures/official_example_request.json
 ```
 
-Point any System One–shaped client at `http://127.0.0.1:8000` instead of TypeSafe’s host when experimenting locally.
+Point a System One–shaped client at `http://127.0.0.1:8000` for local experiments.
 
 ## Python client
 
@@ -136,88 +192,64 @@ print(response.answers["needs_review"].noul)
 print(response.answers["urgency"].score)
 ```
 
-## API compatibility (approximate)
-
-Compatible with the public System One **JSON shape**:
-
-- `POST /v1/systemone`
-- `state`: string | object | array  
-- `questions`: **map** of `noul` | `choice` | `score`  
-- `answers` + `usage.input_tokens` / `usage.output_tokens`  
-
-Intentionally different:
-
-| Topic | Notes |
-|---|---|
-| Model ids | Default alias → base Qwen 0.5B; use `dwidlee/systemone-lite-0.5b` for general SFT |
-| Quality / calibration | Toy baseline; fine-tune if you care about accuracy |
-| `confidence` | Derived as `(p_max - 1/n) / (1 - 1/n)`; may differ from TypeSafe |
-| Auth / pricing | Local; no TypeSafe billing |
-
-OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml)  
-Design notes: [`docs/PROPOSAL.md`](docs/PROPOSAL.md)
+OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml)
 
 ## General synthetic dataset (multi-gym)
 
-Build a **non-chess** System One distill set for broader typed decisions
-(ticket routing, budget allocation, debate judging). Each episode emits
-`choice`-shaped rows (noul/score encoded as letter options) compatible with
-`scripts/chess_finetune.py`.
+Non-chess typed decisions (ticket routing, budget allocation, debate judging).
+Rows are letter-alias `choice` samples for `scripts/chess_finetune.py`.
 
-Published mirror: **[`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)**  
-(`train` 16.2k / `test` 1.8k / `all` 18k). Re-upload with
-`python scripts/upload_general_hf.py` after regenerating locally.
+Build notes:
+
+1. Round-robin gym episodes  
+2. Stratified train / iid-eval split by task  
+3. Separate hard eval (layout / paraphrase / option-subset shift)  
+4. Train with `--stratified` so batches mix gyms  
+
+HF mirror: **[`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)**  
+(`train` 32.4k / `test` 3.6k / `test_hard` 5.4k / `full` 36k).  
+Re-upload: `python scripts/upload_general_hf.py`.
 
 ```bash
-# ~2000 episodes × 3 gyms × ~3 questions ≈ 18k samples
-python scripts/build_general_distill.py --episodes 2000 --seed 0
+python scripts/build_general_distill.py \
+  --episodes 4000 --hard-episodes 600 --eval-frac 0.1 --seed 0
 
-# Inspect
-wc -l data/general_distill.jsonl
-head -1 data/general_distill.jsonl | python -m json.tool
+wc -l data/general_train.jsonl data/general_eval.jsonl data/general_eval_hard.jsonl
 ```
 
-Gyms:
+| Gym | Tasks |
+|---|---|
+| `ticket` | `ticket.route`, `ticket.needs_human`, `ticket.urgency` |
+| `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` |
+| `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` |
 
-| Gym | Tasks | Idea |
-|---|---|---|
-| `ticket` | `ticket.route`, `ticket.needs_human`, `ticket.urgency` | Support-ticket triage |
-| `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` | Budget / resource picks |
-| `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` | Evidence-weighted judging |
-
-### Fine-tune → published general model
+### Fine-tune
 
 ```bash
 python scripts/chess_finetune.py \
   --data data/general_train.jsonl \
   --out checkpoints/systemone-sft \
-  --epochs 1 --batch-size 2 --max-steps 2000 --tasks all
+  --epochs 1 --batch-size 3 --tasks all --stratified
 
 python scripts/general_eval.py \
   --data data/general_eval.jsonl \
   --model checkpoints/systemone-sft \
   --out benchmarks/general_sft_eval.json
-```
 
-**Held-out (`general_eval`, n=1800):** base **0.422** → SFT **0.607** (+0.186).  
-Strongest lifts: `ticket.route` 0.44→0.90, `ticket.urgency` 0.37→0.73,
-`alloc.fund_next` 0.24→0.90. Full reports:
-[`benchmarks/general_base_eval.json`](benchmarks/general_base_eval.json),
-[`benchmarks/general_sft_eval.json`](benchmarks/general_sft_eval.json).
+python scripts/general_eval.py \
+  --data data/general_eval_hard.jsonl \
+  --model checkpoints/systemone-sft \
+  --out benchmarks/general_sft_eval_hard.json
 
-Published weights: **[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)**  
-(re-push: `python scripts/upload_model_hf.py`).
-
-```bash
+python scripts/upload_model_hf.py
 systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
 ```
 
+Accuracy numbers: see [Measured results](#measured-results).
+
 ## Chess fine-tuning (Stockfish distill)
 
-Train a **separate** local System One policy to pick **legal** chess moves by
-distilling Stockfish. Do not confuse this with
-[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)
-(the general multi-gym SFT).
+Separate checkpoint for legal move choice. Not the general HF model above.
 
 ```bash
 # Ubuntu: sudo apt install stockfish
@@ -225,84 +257,52 @@ distilling Stockfish. Do not confuse this with
 
 pip install -e ".[chess]"
 
-# 1) Build labeled JSONL (state + choice criteria + alias label)
 python scripts/chess_distill_dataset.py --positions 500 --movetime-ms 40
 
-# 2) Fine-tune Qwen2.5-0.5B (GPU recommended)
 python scripts/chess_finetune.py \
   --data data/chess_distill.jsonl \
   --out checkpoints/chess-sft \
   --epochs 2 --batch-size 2 --max-steps 200
 
-# 3) Measure move-choice accuracy
-python scripts/chess_eval.py --data data/chess_distill.jsonl \
-  --model checkpoints/chess-sft --task move --limit 100
+python scripts/chess_eval.py --data data/chess_eval_5k.jsonl \
+  --model checkpoints/chess-sft --task move --limit 500
 ```
-
-Serve the fine-tuned weights:
 
 ```bash
 systemone-lite --model checkpoints/chess-sft --port 8000
 ```
 
-Labels prefer Stockfish when available (`/usr/games/stockfish` on Ubuntu), otherwise a tactical heuristic.
+Labels: Stockfish when available (`/usr/games/stockfish` on Ubuntu), else a
+tactical heuristic. Transfer numbers: [Measured results](#chess-no-positive-transfer-from-general-sft).
 
 ## Viral chess demo (local video)
-
-Generates a longer vertical clip with the **fine-tuned** chess checkpoint by default:
 
 ```bash
 pip install -e ".[viral]"
 
-# uses checkpoints/chess-sft if present (~20 plies, ~90s)
 python scripts/chess_viral_demo.py --plies 20 --fps 12 \
   --model checkpoints/chess-sft
-
-# base model instead:
-# python scripts/chess_viral_demo.py --model Qwen/Qwen2.5-0.5B-Instruct
 ```
 
-Outputs:
-- `benchmarks/viral/systemone_lite_chess.mp4`
-- `benchmarks/viral/systemone_lite_chess.gif`
-
-Dry-run without weights: `python scripts/chess_viral_demo.py --stub --plies 6`
-
-## Latency (indicative)
-
-In-process on an **RTX 3060**, `Qwen2.5-0.5B-Instruct`, with prefix KV cache (warmup excluded):
-
-| Case | p50 latency |
-|---|---:|
-| Short state · 3 questions | ~25 ms |
-| Long state (~6k chars) · 13 questions | ~145 ms |
-
-TypeSafe publicly cites Jev E2E latencies roughly in the **70–500 ms** band (their cloud + network). Numbers are **not** a head-to-head bake-off: different hardware, no shared eval set, and this project prioritizes local hackability over product parity.
-
-Reproduce:
-
-```bash
-python scripts/bench_latency.py --warmup 5 --runs 20
-```
+Outputs: `benchmarks/viral/systemone_lite_chess.mp4`, `.gif`  
+Dry-run: `python scripts/chess_viral_demo.py --stub --plies 6`
 
 ## Project layout
 
 ```text
 src/systemone_lite/   # schema, prompt, infer (prefix cache), API, client, synth/
-tests/                # shape / API / prefix-cache / synth checks
-scripts/              # demo, latency, chess + general train/eval, HF upload
-benchmarks/           # latency + held-out eval JSON (and viral clips)
-openapi/              # System One–shaped OpenAPI
-docs/PROPOSAL.md      # design decisions
+tests/
+scripts/              # demo, latency, train/eval, HF upload
+benchmarks/           # latency + held-out JSON (+ viral clips)
+openapi/
+docs/PROPOSAL.md
 ```
 
 ## Status
 
-Early toy project. General multi-gym SFT is published on Hugging Face; chess SFT
-stays local. Expect rough edges: multi-token option labels, weak zero-shot
-accuracy on hard noul/score tasks, and limited calibration until you add more data.
-
-Contributions and experiments welcome—especially calibration, better option tokenization, and cleaner serving.
+Toy project. Published: general dataset + SFT on Hugging Face. Chess SFT is
+local-only. Limitations: multi-token option keys, weak debate tasks on 0.5B,
+no reliability diagrams / ECE yet (option softmax ≠ population calibration).
 
 ## License
 
@@ -310,4 +310,6 @@ MIT
 
 ## Acknowledgments / disclaimer
 
-System One / Jev concepts and public API docs belong to their respective owners (TypeSafe AI). This repository is an independent, unofficial approximation for local experimentation only.
+System One / Jev concepts and public API docs belong to their respective owners
+(TypeSafe AI). This repository is an independent, unofficial approximation for
+local experimentation only.

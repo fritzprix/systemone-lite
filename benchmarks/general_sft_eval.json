@@ -1,43 +1,43 @@
 {
   "model": "checkpoints/systemone-sft",
-  "n": 1800,
-  "accuracy": 0.6072222222222222,
+  "n": 3600,
+  "accuracy": 0.6791666666666667,
   "per_task": {
     "alloc.can_fund_all": {
-      "n": 216,
-      "accuracy": 0.4861111111111111
+      "n": 400,
+      "accuracy": 0.6
     },
     "alloc.fund_next": {
-      "n": 202,
-      "accuracy": 0.8960396039603961
+      "n": 400,
+      "accuracy": 0.98
     },
     "alloc.pressure": {
-      "n": 195,
-      "accuracy": 0.5076923076923077
+      "n": 400,
+      "accuracy": 0.595
     },
     "debate.confidence": {
-      "n": 213,
-      "accuracy": 0.3380281690140845
+      "n": 400,
+      "accuracy": 0.5075
     },
     "debate.enough_evidence": {
-      "n": 215,
-      "accuracy": 0.5023255813953489
+      "n": 400,
+      "accuracy": 0.46
     },
     "debate.winner": {
-      "n": 213,
-      "accuracy": 0.5305164319248826
+      "n": 400,
+      "accuracy": 0.4925
     },
     "ticket.needs_human": {
-      "n": 184,
-      "accuracy": 0.6467391304347826
+      "n": 400,
+      "accuracy": 0.775
     },
     "ticket.route": {
-      "n": 186,
-      "accuracy": 0.8978494623655914
+      "n": 400,
+      "accuracy": 1.0
     },
     "ticket.urgency": {
-      "n": 176,
-      "accuracy": 0.7329545454545454
+      "n": 400,
+      "accuracy": 0.7025
     }
   }
 }

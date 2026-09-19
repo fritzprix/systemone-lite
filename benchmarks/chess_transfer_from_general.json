@@ -1,0 +1,10 @@
+{
+  "data": "data/chess_eval_5k.jsonl",
+  "task": "move",
+  "n": 500,
+  "accuracy": {
+    "base": 0.79,
+    "general_sft": 0.458,
+    "chess_sft": 0.834
+  }
+}

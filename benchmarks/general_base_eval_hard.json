@@ -1,0 +1,43 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "n": 5400,
+  "accuracy": 0.4266666666666667,
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 600,
+      "accuracy": 0.54
+    },
+    "alloc.fund_next": {
+      "n": 600,
+      "accuracy": 0.27666666666666667
+    },
+    "alloc.pressure": {
+      "n": 600,
+      "accuracy": 0.3516666666666667
+    },
+    "debate.confidence": {
+      "n": 600,
+      "accuracy": 0.26166666666666666
+    },
+    "debate.enough_evidence": {
+      "n": 600,
+      "accuracy": 0.465
+    },
+    "debate.winner": {
+      "n": 600,
+      "accuracy": 0.49833333333333335
+    },
+    "ticket.needs_human": {
+      "n": 600,
+      "accuracy": 0.6216666666666667
+    },
+    "ticket.route": {
+      "n": 600,
+      "accuracy": 0.44166666666666665
+    },
+    "ticket.urgency": {
+      "n": 600,
+      "accuracy": 0.38333333333333336
+    }
+  }
+}

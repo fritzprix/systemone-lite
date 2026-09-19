@@ -9,6 +9,7 @@ from systemone_lite.synth import (
     generate_debate_episode,
     generate_ticket_episode,
 )
+from systemone_lite.synth.common import maybe_subset_options, perturb_state
 
 
 def _assert_samples(samples) -> None:
@@ -30,6 +31,14 @@ def test_ticket_dungeon_labels_consistent() -> None:
     assert "ticket.urgency" in tasks
 
 
+def test_hard_variants() -> None:
+    for seed in range(20):
+        rng = random.Random(seed)
+        _assert_samples(generate_ticket_episode(rng, hard=True))
+        _assert_samples(generate_allocator_episode(rng, hard=True))
+        _assert_samples(generate_debate_episode(rng, hard=True))
+
+
 def test_allocator_and_debate() -> None:
     rng = random.Random(1)
     _assert_samples(generate_allocator_episode(rng))
@@ -46,3 +55,23 @@ def test_billing_ticket_routes_to_billing() -> None:
             found = True
             break
     assert found
+
+
+def test_option_subset_keeps_label() -> None:
+    rng = random.Random(0)
+    opts = {"a": "A", "b": "B", "c": "C", "d": "D"}
+    for _ in range(50):
+        sub = maybe_subset_options(rng, opts, "b", hard=True)
+        assert "b" in sub
+        assert 2 <= len(sub) <= 4
+
+
+def test_perturb_state_hard_can_wrap() -> None:
+    rng = random.Random(2)
+    wrapped = False
+    for _ in range(40):
+        out = perturb_state(rng, {"x": 1, "y": 2}, hard=True)
+        if "payload" in out or "application_state" in out:
+            wrapped = True
+            break
+    assert wrapped
