@@ -1,0 +1,167 @@
+{
+  "project": "systemone-lite",
+  "resolved_model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "device": {
+    "torch_cuda": true,
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "gpu_mem_total_gb": 11.62,
+    "device_used": "cuda"
+  },
+  "method": {
+    "warmup": 3,
+    "runs": 15,
+    "timer": "time.perf_counter (in-process, no HTTP)",
+    "option_scoring": "SystemOneClient.system_one (batched option logits)",
+    "ar_json": "model.generate greedy JSON for all fields (full vocab)"
+  },
+  "cases": [
+    {
+      "name": "short_3q",
+      "n_questions": 3,
+      "state_chars": 73,
+      "option_scoring": {
+        "mode": "option_scoring",
+        "description": "Batched next-token logits; softmax over option token ids only; prefix KV when n_questions>=2",
+        "latency_ms": {
+          "min": 24.28,
+          "p50": 26.23,
+          "p95": 27.93,
+          "max": 28.7,
+          "mean": 26.26
+        },
+        "input_tokens_last": 160,
+        "output_tokens_last": 0
+      },
+      "ar_json": {
+        "mode": "ar_json",
+        "description": "Autoregressive generate() of a multi-field JSON object (greedy, max_new_tokens=124, full vocabulary)",
+        "latency_ms": {
+          "min": 1012.33,
+          "p50": 1056.91,
+          "p95": 1111.26,
+          "max": 1134.12,
+          "mean": 1060.63
+        },
+        "input_tokens_last": 101,
+        "output_tokens_last": 124,
+        "max_new_tokens": 124
+      },
+      "speedup_ar_over_option_p50": 40.29
+    },
+    {
+      "name": "short_13q",
+      "n_questions": 13,
+      "state_chars": 73,
+      "option_scoring": {
+        "mode": "option_scoring",
+        "description": "Batched next-token logits; softmax over option token ids only; prefix KV when n_questions>=2",
+        "latency_ms": {
+          "min": 59.54,
+          "p50": 64.87,
+          "p95": 67.26,
+          "max": 68.6,
+          "mean": 64.24
+        },
+        "input_tokens_last": 625,
+        "output_tokens_last": 0
+      },
+      "ar_json": {
+        "mode": "ar_json",
+        "description": "Autoregressive generate() of a multi-field JSON object (greedy, max_new_tokens=404, full vocabulary)",
+        "latency_ms": {
+          "min": 3383.19,
+          "p50": 3482.02,
+          "p95": 3566.37,
+          "max": 3663.02,
+          "mean": 3484.96
+        },
+        "input_tokens_last": 260,
+        "output_tokens_last": 404,
+        "max_new_tokens": 404
+      },
+      "speedup_ar_over_option_p50": 53.68
+    },
+    {
+      "name": "long_3q",
+      "n_questions": 3,
+      "state_chars": 6274,
+      "option_scoring": {
+        "mode": "option_scoring",
+        "description": "Batched next-token logits; softmax over option token ids only; prefix KV when n_questions>=2",
+        "latency_ms": {
+          "min": 105.2,
+          "p50": 107.56,
+          "p95": 110.55,
+          "max": 110.85,
+          "mean": 107.83
+        },
+        "input_tokens_last": 1361,
+        "output_tokens_last": 0
+      },
+      "ar_json": {
+        "mode": "ar_json",
+        "description": "Autoregressive generate() of a multi-field JSON object (greedy, max_new_tokens=124, full vocabulary)",
+        "latency_ms": {
+          "min": 1102.22,
+          "p50": 1137.3,
+          "p95": 1172.62,
+          "max": 1191.53,
+          "mean": 1138.31
+        },
+        "input_tokens_last": 1302,
+        "output_tokens_last": 124,
+        "max_new_tokens": 124
+      },
+      "speedup_ar_over_option_p50": 10.57
+    },
+    {
+      "name": "long_13q",
+      "n_questions": 13,
+      "state_chars": 6274,
+      "option_scoring": {
+        "mode": "option_scoring",
+        "description": "Batched next-token logits; softmax over option token ids only; prefix KV when n_questions>=2",
+        "latency_ms": {
+          "min": 155.34,
+          "p50": 157.93,
+          "p95": 163.04,
+          "max": 163.38,
+          "mean": 158.44
+        },
+        "input_tokens_last": 1826,
+        "output_tokens_last": 0
+      },
+      "ar_json": {
+        "mode": "ar_json",
+        "description": "Autoregressive generate() of a multi-field JSON object (greedy, max_new_tokens=404, full vocabulary)",
+        "latency_ms": {
+          "min": 3534.54,
+          "p50": 3613.11,
+          "p95": 3704.88,
+          "max": 3714.68,
+          "mean": 3606.7
+        },
+        "input_tokens_last": 1461,
+        "output_tokens_last": 404,
+        "max_new_tokens": 404
+      },
+      "speedup_ar_over_option_p50": 22.88
+    }
+  ],
+  "jev_published": {
+    "source": "TypeSafe public claims (docs/blog; not measured on this machine)",
+    "e2e_latency_ms": {
+      "typical_low": 70,
+      "typical_high": 500
+    },
+    "notes": [
+      "Vendor-published cloud E2E range; not a live call from this host."
+    ]
+  },
+  "caveats": [
+    "AR path measures generate() wall time, not JSON parse success rate.",
+    "AR max_new_tokens is a fixed budget; early EOS can shorten some runs.",
+    "Option-scoring always returns schema-valid symbols; AR may emit invalid JSON.",
+    "Not compared against TypeSafe/Jev hardware or sampler."
+  ]
+}

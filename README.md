@@ -32,25 +32,51 @@ Intentionally different: model ids, accuracy/calibration, auth, and
 ### Latency (in-process, no HTTP)
 
 Hardware: **NVIDIA RTX 3060** (12 GB). Model: `Qwen/Qwen2.5-0.5B-Instruct`.
-Prefix KV cache enabled. Warmup excluded.
-Source: [`benchmarks/latency_prefix_cache.json`](benchmarks/latency_prefix_cache.json)
-(`scripts/bench_latency.py`).
+Warmup excluded.
 
-| Case | Questions | State chars | p50 (ms) | p95 (ms) |
-|---|---:|---:|---:|---:|
-| short_1q | 1 | 73 | 10.7 | 11.2 |
-| short_3q | 3 | 73 | 24.4 | 25.2 |
-| short_8q | 8 | 73 | 39.0 | 40.1 |
-| short_13q | 13 | 73 | 58.4 | — |
-| long_3q | 3 | 6274 | 98.8 | — |
-| long_13q | 13 | 6274 | 145.0 | — |
+**Option scoring** = System One path (batched next-token logits; softmax over
+option token ids; prefix KV when ≥2 questions).  
+**AR JSON** = same weights, `model.generate` greedy multi-field JSON
+(full vocabulary; fixed `max_new_tokens` budget).
 
-TypeSafe’s public materials describe Jev end-to-end latency roughly in the
-**70–500 ms** range (their cloud + network; not measured here). That band is
-not a controlled comparison: different hardware, model, and no shared eval set.
+Sources:
+[`benchmarks/latency_prefix_cache.json`](benchmarks/latency_prefix_cache.json)
+(option-only sweep),
+[`benchmarks/latency_vs_ar.json`](benchmarks/latency_vs_ar.json)
+(option vs AR).
+
+#### Option scoring (prefix KV)
+
+| Case | Questions | State chars | p50 (ms) |
+|---|---:|---:|---:|
+| short_1q | 1 | 73 | 10.7 |
+| short_3q | 3 | 73 | 24.4 |
+| short_8q | 8 | 73 | 39.0 |
+| short_13q | 13 | 73 | 58.4 |
+| long_3q | 3 | 6274 | 98.8 |
+| long_13q | 13 | 6274 | 145.0 |
+
+#### Option scoring vs AR JSON (same machine / weights)
+
+| Case | Option p50 (ms) | AR JSON p50 (ms) | AR / option |
+|---|---:|---:|---:|
+| short_3q | 26.2 | 1057 | 40.3× |
+| short_13q | 64.9 | 3482 | 53.7× |
+| long_3q | 107.6 | 1137 | 10.6× |
+| long_13q | 157.9 | 3613 | 22.9× |
+
+Notes: AR wall time is `generate()` only (no HTTP). In these runs AR often
+filled the `max_new_tokens` budget (no early EOS), so treat ratios as an upper
+bound on AR cost for that budget. Option scoring returns schema symbols by
+construction; AR may emit invalid JSON (not scored here).
+
+TypeSafe’s public materials describe Jev E2E latency roughly in the
+**70–500 ms** range (their cloud + network; not measured here). Not a controlled
+comparison to this local bench.
 
 ```bash
-python scripts/bench_latency.py --warmup 5 --runs 20
+python scripts/bench_latency.py --warmup 3 --runs 15 \
+  --out benchmarks/latency_vs_ar.json
 ```
 
 ### General SFT accuracy (option top-1)

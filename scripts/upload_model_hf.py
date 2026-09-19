@@ -64,17 +64,25 @@ chess-only SFT **0.834**. General SFT does not improve chess.
 
 ## Latency (inference path; base 0.5B measured)
 
-In-process System One calls on **RTX 3060**, prefix KV cache, warmup excluded
-(`benchmarks/latency_prefix_cache.json`). Same scoring path as this checkpoint
-(weights differ; latency is dominated by 0.5B forward).
+In-process on **RTX 3060**, warmup excluded. Same scoring path this checkpoint
+uses (0.5B forward dominates latency).
 
-| Case | p50 (ms) |
-|---|---:|
-| Short state, 3 questions | 24.4 |
-| Long state (~6k chars), 13 questions | 145.0 |
+**Option scoring** vs **AR JSON** (`model.generate` greedy multi-field JSON,
+full vocab). Source: repo `benchmarks/latency_vs_ar.json`.
 
-TypeSafe public materials cite Jev E2E latency roughly **70–500 ms** (cloud +
-network; not measured here). Not a controlled head-to-head.
+| Case | Option p50 (ms) | AR JSON p50 (ms) | AR / option |
+|---|---:|---:|---:|
+| short_3q | 26.2 | 1057 | 40.3× |
+| short_13q | 64.9 | 3482 | 53.7× |
+| long_3q (~6k chars) | 107.6 | 1137 | 10.6× |
+| long_13q | 157.9 | 3613 | 22.9× |
+
+Option path: batched next-token logits; softmax over option token ids; prefix KV.
+AR runs often used the full `max_new_tokens` budget (no early EOS). Option path
+is schema-constrained; AR JSON validity is not guaranteed in this bench.
+
+TypeSafe public materials cite Jev E2E roughly **70–500 ms** (cloud + network;
+not measured here).
 
 ## Inference method (server)
 
