@@ -89,7 +89,7 @@ def train(
     max_length: int,
     max_steps: int | None,
     seed: int,
-    tasks: set[str],
+    tasks: set[str] | None,
 ) -> None:
     random.seed(seed)
     torch.manual_seed(seed)
@@ -180,7 +180,7 @@ def train(
         "data": str(data_path),
         "steps": step,
         "epochs": epochs,
-        "tasks": sorted(tasks),
+        "tasks": sorted(tasks) if tasks is not None else ["all"],
         "final_avg_loss": running / max(step, 1),
     }
     (output_dir / "train_meta.json").write_text(json.dumps(meta, indent=2) + "\n")
@@ -210,11 +210,16 @@ def main() -> None:
     parser.add_argument(
         "--tasks",
         default="move,piece,destination",
-        help="Comma-separated tasks to include",
+        help="Comma-separated tasks, or 'all' for every task in the JSONL",
     )
     args = parser.parse_args()
 
-    tasks = {t.strip() for t in args.tasks.split(",") if t.strip()}
+    raw_tasks = {t.strip() for t in args.tasks.split(",") if t.strip()}
+    tasks: set[str] | None
+    if not raw_tasks or raw_tasks == {"all"}:
+        tasks = None
+    else:
+        tasks = raw_tasks
     train(
         data_path=args.data,
         output_dir=args.out,

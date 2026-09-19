@@ -15,6 +15,43 @@ Under the hood it is **not** Jev’s proprietary parallel sampler or RLCD stack.
 
 Think of it as an educational / hackable **local System One sandbox**, useful for API prototyping, latency experiments, and learning how typed decision APIs feel in application code.
 
+## Resources
+
+| Resource | Link | What it is |
+|---|---|---|
+| **GitHub** | [fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) | Code, API server, synth gyms, train/eval scripts |
+| **HF dataset** | [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general) | Multi-gym typed-decision distill (`train` 16.2k / `test` 1.8k / `all` 18k) |
+| **HF model** | [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b) | Qwen2.5-0.5B fine-tuned on that dataset (general SFT, not chess) |
+| **Base model** | [`Qwen/Qwen2.5-0.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) | Default zero-shot backbone (Apache-2.0) |
+| **System One API (reference)** | [TypeSafe docs](https://docs.typesafe.ai/api.md) | Public JSON contract we approximate — not our product |
+| **Design notes** | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) | Architecture decisions (batched AR, not MLM) |
+
+**How the HF artifacts fit together**
+
+```text
+Qwen2.5-0.5B-Instruct          ← default server weights (zero-shot)
+        │
+        │  SFT on systemone-lite-general
+        ▼
+dwidlee/systemone-lite-0.5b    ← better ticket/alloc/debate choices
+```
+
+- Prefer **`systemone-lite-0.5b`** when you want stronger routing / allocation / debate decisions out of the box.  
+- Keep the **base Qwen** (or a local `checkpoints/chess-sft`) for chess demos — the general SFT is a **separate** checkpoint and does not claim chess transfer.  
+- Chess weights are **local-only** for now (`checkpoints/chess-sft`); regenerate with the Stockfish pipeline below if needed.
+
+```bash
+# Use the published general SFT checkpoint
+systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
+
+# Or load the dataset without regenerating locally
+python - <<'PY'
+from datasets import load_dataset
+ds = load_dataset("dwidlee/systemone-lite-general")
+print(ds)
+PY
+```
+
 ## Why this exists
 
 - **Local-first:** run on your GPU/CPU; no TypeSafe account required for development  
@@ -112,7 +149,7 @@ Intentionally different:
 
 | Topic | Notes |
 |---|---|
-| Model ids | `systemone-lite-latest` → Qwen 0.5B (not `jev-*`) |
+| Model ids | Default alias → base Qwen 0.5B; use `dwidlee/systemone-lite-0.5b` for general SFT |
 | Quality / calibration | Toy baseline; fine-tune if you care about accuracy |
 | `confidence` | Derived as `(p_max - 1/n) / (1 - 1/n)`; may differ from TypeSafe |
 | Auth / pricing | Local; no TypeSafe billing |
@@ -127,8 +164,9 @@ Build a **non-chess** System One distill set for broader typed decisions
 `choice`-shaped rows (noul/score encoded as letter options) compatible with
 `scripts/chess_finetune.py`.
 
-**Hugging Face:** [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)
-(`train` 16.2k / `test` 1.8k / `all` 18k)
+Published mirror: **[`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)**  
+(`train` 16.2k / `test` 1.8k / `all` 18k). Re-upload with
+`python scripts/upload_general_hf.py` after regenerating locally.
 
 ```bash
 # ~2000 episodes × 3 gyms × ~3 questions ≈ 18k samples
@@ -141,24 +179,45 @@ head -1 data/general_distill.jsonl | python -m json.tool
 
 Gyms:
 
-| Gym | Tasks |
-|---|---|
-| `ticket` | `ticket.route`, `ticket.needs_human`, `ticket.urgency` |
-| `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` |
-| `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` |
+| Gym | Tasks | Idea |
+|---|---|---|
+| `ticket` | `ticket.route`, `ticket.needs_human`, `ticket.urgency` | Support-ticket triage |
+| `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` | Budget / resource picks |
+| `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` | Evidence-weighted judging |
 
-Fine-tune (separate checkpoint from chess):
+### Fine-tune → published general model
 
 ```bash
 python scripts/chess_finetune.py \
-  --data data/general_distill.jsonl \
+  --data data/general_train.jsonl \
   --out checkpoints/systemone-sft \
-  --epochs 1 --batch-size 1 --max-steps 2000
+  --epochs 1 --batch-size 2 --max-steps 2000 --tasks all
+
+python scripts/general_eval.py \
+  --data data/general_eval.jsonl \
+  --model checkpoints/systemone-sft \
+  --out benchmarks/general_sft_eval.json
+```
+
+**Held-out (`general_eval`, n=1800):** base **0.422** → SFT **0.607** (+0.186).  
+Strongest lifts: `ticket.route` 0.44→0.90, `ticket.urgency` 0.37→0.73,
+`alloc.fund_next` 0.24→0.90. Full reports:
+[`benchmarks/general_base_eval.json`](benchmarks/general_base_eval.json),
+[`benchmarks/general_sft_eval.json`](benchmarks/general_sft_eval.json).
+
+Published weights: **[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)**  
+(re-push: `python scripts/upload_model_hf.py`).
+
+```bash
+systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
 ```
 
 ## Chess fine-tuning (Stockfish distill)
 
-Train the local System One policy to pick **legal** chess moves by distilling Stockfish.
+Train a **separate** local System One policy to pick **legal** chess moves by
+distilling Stockfish. Do not confuse this with
+[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)
+(the general multi-gym SFT).
 
 ```bash
 # Ubuntu: sudo apt install stockfish
@@ -229,16 +288,19 @@ python scripts/bench_latency.py --warmup 5 --runs 20
 ## Project layout
 
 ```text
-src/systemone_lite/   # schema, prompt, infer (prefix cache), API, client
-tests/                # shape / API / prefix-cache checks
-scripts/              # demo + latency bench
+src/systemone_lite/   # schema, prompt, infer (prefix cache), API, client, synth/
+tests/                # shape / API / prefix-cache / synth checks
+scripts/              # demo, latency, chess + general train/eval, HF upload
+benchmarks/           # latency + held-out eval JSON (and viral clips)
 openapi/              # System One–shaped OpenAPI
 docs/PROPOSAL.md      # design decisions
 ```
 
 ## Status
 
-Early toy project. Expect rough edges: multi-token option labels, weak zero-shot accuracy, and limited score semantics until you add data/fine-tuning.
+Early toy project. General multi-gym SFT is published on Hugging Face; chess SFT
+stays local. Expect rough edges: multi-token option labels, weak zero-shot
+accuracy on hard noul/score tasks, and limited calibration until you add more data.
 
 Contributions and experiments welcome—especially calibration, better option tokenization, and cleaner serving.
 
