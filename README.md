@@ -120,6 +120,26 @@ Intentionally different:
 OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml)  
 Design notes: [`docs/PROPOSAL.md`](docs/PROPOSAL.md)
 
+## Viral chess demo (local video)
+
+Generates a short vertical clip: board + System One piece/move probabilities.
+
+```bash
+pip install -e ".[viral]"
+python scripts/chess_viral_demo.py --plies 8 --fps 12
+# outputs:
+#   benchmarks/viral/systemone_lite_chess.mp4
+#   benchmarks/viral/systemone_lite_chess.gif
+```
+
+Dry-run without downloading weights:
+
+```bash
+python scripts/chess_viral_demo.py --stub --plies 4
+```
+
+Each turn is an iterate loop: **choice(piece)** → **choice(destination)**, with `criteria` restricted to **legal moves only** (`python-chess`). Good for screen recordings / Shorts / Reels. Strength is toy-level unless you fine-tune.
+
 ## Latency (indicative)
 
 In-process on an **RTX 3060**, `Qwen2.5-0.5B-Instruct`, with prefix KV cache (warmup excluded):

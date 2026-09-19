@@ -24,6 +24,13 @@ dev = [
   "pytest>=8.3.0",
   "ruff>=0.8.0",
 ]
+viral = [
+  "chess>=1.10",
+  "Pillow>=10.0",
+  "imageio>=2.34",
+  "imageio-ffmpeg>=0.5",
+  "numpy>=1.26",
+]
 
 [project.scripts]
 systemone-lite = "systemone_lite.api:main"
