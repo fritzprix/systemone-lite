@@ -120,6 +120,39 @@ Intentionally different:
 OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml)  
 Design notes: [`docs/PROPOSAL.md`](docs/PROPOSAL.md)
 
+## General synthetic dataset (multi-gym)
+
+Build a **non-chess** System One distill set for broader typed decisions
+(ticket routing, budget allocation, debate judging). Each episode emits
+`choice`-shaped rows (noul/score encoded as letter options) compatible with
+`scripts/chess_finetune.py`.
+
+```bash
+# ~2000 episodes × 3 gyms × ~3 questions ≈ 18k samples
+python scripts/build_general_distill.py --episodes 2000 --seed 0
+
+# Inspect
+wc -l data/general_distill.jsonl
+head -1 data/general_distill.jsonl | python -m json.tool
+```
+
+Gyms:
+
+| Gym | Tasks |
+|---|---|
+| `ticket` | `ticket.route`, `ticket.needs_human`, `ticket.urgency` |
+| `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` |
+| `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` |
+
+Fine-tune (separate checkpoint from chess):
+
+```bash
+python scripts/chess_finetune.py \
+  --data data/general_distill.jsonl \
+  --out checkpoints/systemone-sft \
+  --epochs 1 --batch-size 1 --max-steps 2000
+```
+
 ## Chess fine-tuning (Stockfish distill)
 
 Train the local System One policy to pick **legal** chess moves by distilling Stockfish.
