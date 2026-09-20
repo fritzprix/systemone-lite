@@ -244,38 +244,36 @@ class SnakeGame:
         closer_moves = [d for d, a in analyses.items() if a.is_closer and a.is_safe]
         safe_moves = [d for d, a in analyses.items() if a.is_safe]
 
-        # Prioritize criteria order: recommended moves first, then other safe moves, then deadly
+        # Prioritize criteria order: recommended moves first, then other safe moves
         sorted_dirs = sorted(
             ["UP", "DOWN", "LEFT", "RIGHT"],
             key=lambda d: (not analyses[d].is_safe, not analyses[d].is_closer)
         )
+        safe_dirs = [d for d in sorted_dirs if analyses[d].is_safe]
+        if not safe_dirs:
+            safe_dirs = sorted_dirs
 
-        alias_to_dir: dict[str, str] = {d: d for d in sorted_dirs}
+        alias_to_dir: dict[str, str] = {d: d for d in safe_dirs}
         criteria: dict[str, str] = {}
-        for dname in sorted_dirs:
+        for dname in safe_dirs:
             analysis = analyses[dname]
-            if not analysis.is_safe:
-                criteria[dname] = f"DEADLY: {analysis.summary()}"
-            elif analysis.is_closer:
+            if analysis.is_closer:
                 criteria[dname] = f"RECOMMENDED: Move {dname} directly towards food ({analysis.summary()})"
             else:
-                criteria[dname] = f"SAFE: Move {dname} away from food ({analysis.summary()})"
+                criteria[dname] = f"SAFE: Move {dname} open path ({analysis.summary()})"
 
-        state = {
-            "grid_map": f"\n{grid_ascii}\n",
-            "legend": "'@': Snake Head, 'o': Snake Body, '★': Food Apple, '.': Empty cell",
-            "snake_head": f"Row {hr}, Col {hc} (@)",
-            "food_position": f"Row {fr}, Col {fc} (★)",
-            "relative_direction": f"Food (★) is {rel_vert} and {rel_horiz} from Snake Head (@).",
-            "distance_to_food": f"{curr_dist} steps",
-            "recommended_food_moves": closer_moves if closer_moves else safe_moves,
-        }
+        state = f"""Snake Grid Map:
+{grid_ascii}
+
+Snake Head: Row {hr}, Col {hc} (@)
+Food: Row {fr}, Col {fc} (★) - {rel_vert} and {rel_horiz} ({curr_dist} steps)
+Legend: '@' Head, 'o' Body, '★' Food, '.' Empty
+"""
 
         questions = {
             "direction": choice(
-                f"Based on the grid map, select the best move direction for the snake head (@) to reach food (★). "
-                f"Food is {rel_vert} and {rel_horiz}. Pick a RECOMMENDED move towards food. Never pick DEADLY moves. "
-                "Reply with: " + ", ".join(sorted_dirs),
+                f"Based on the grid map, select the best safe move direction for the snake head (@) to reach food (★). "
+                f"Food is {rel_vert} and {rel_horiz}.",
                 criteria,
             ),
             "danger_level": score(

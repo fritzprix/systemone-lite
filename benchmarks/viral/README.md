@@ -17,6 +17,7 @@ This directory contains animated visual demos comparing different iterations of 
 | **🔢 2048 Agent** | `viral/v1_mixed_sft/game2048.gif` | 25 steps<br/>Score: 148, Max: 32<br/>~35ms / move | 4-4, 8-8, 16-16 strategic directional merges |
 | **🗺️ GridWorld Hazard** | `viral/v1_mixed_sft/gridworld.gif` | 10 steps (Goal reached 🏆)<br/>~36ms / step | Real-time lava (🔥) hazard avoidance & shortest path navigation |
 | **📦 Sokoban AI** | `viral/v1_mixed_sft/sokoban.gif` | 15 steps<br/>~33ms / step | Raw 2D newline map parsing, legal action masking, box delivered to goal (✅) |
+| **🐍 Snake Agent** | `viral/v1_mixed_sft/snake.gif` | 60 steps (Full survival)<br/>~45ms / step | Real-time wall collision avoidance, boundary turning, survival navigation |
 | **🔴 Connect Four** | `viral/v1_mixed_sft/connect4.gif` | 18 turns<br/>~39ms / turn | 7-column parallel probability HUD and strategic vertical stacking |
 
 ---
