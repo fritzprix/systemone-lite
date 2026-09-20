@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Regenerate notebooks/phase2_spatial_training_colab.ipynb for Colab T4."""
+"""Regenerate notebooks/phase2_spatial_training_colab.ipynb for Colab T4.
+
+Data is prebuilt + uploaded to Hugging Face; Colab only downloads and trains.
+"""
 
 from __future__ import annotations
 
@@ -34,15 +37,24 @@ def main() -> None:
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/fritzprix/systemone-lite/blob/main/notebooks/phase2_spatial_training_colab.ipynb)
 
+**Data is pre-generated.** This notebook downloads
+[`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
+(204 800 train / 3 500 test, bare labels + D₄ spatial) and fine-tunes only.
+
 | Item | Value |
 |---|---|
-| GPU | **T4 16GB** (Runtime → Change runtime type → T4) |
+| GPU | **T4 16GB** (Runtime → T4) |
+| Dataset | `dwidlee/systemone-lite-phase2` |
 | Base | `Qwen/Qwen2.5-0.5B-Instruct` or Phase 1 `dwidlee/systemone-lite-0.5b` |
-| Data | `scripts/prepare_phase2_colab.py` (spatial built on Colab with current synth; general/chess from Hub) |
-| Default | **smoke** ≈ 24k rows, batch 4, max_length 768 |
-| Full | 204.8k-equivalent caps — expect ~8–10h; mount Drive |
+| smoke | 20 000-row subset, ~few thousand steps |
+| full | all 204 800 rows ≈ 51 200 steps @ batch 4 (~8–10h) — use Drive |
 
-This notebook trains only. Phase 2 exit-gate eval (bare held-out + invariance) is separate.
+Rebuild dataset locally (not on Colab):
+
+```bash
+python scripts/build_phase2_distill.py
+python scripts/upload_phase2_hf.py
+```
 """
         ),
         md("## 1. GPU check"),
@@ -75,10 +87,10 @@ print("cwd:", Path(".").resolve())
 """
         ),
         md(
-            """## 3. Config (T4 defaults)
+            """## 3. Config
 
-- `MODE="smoke"` — recommended on free Colab.
-- `MODE="full"` — large caps; use Drive + long session.
+- `MODE="smoke"` — free Colab T4.
+- `MODE="full"` — entire Hub train split; mount Drive.
 """
         ),
         code(
@@ -86,22 +98,19 @@ print("cwd:", Path(".").resolve())
 
 MODE = "smoke"  # "smoke" | "full"
 START_FROM = "base"  # "base" | "phase1"
+HF_DATA = "dwidlee/systemone-lite-phase2"
 OUT_DIR = Path("checkpoints/systemone-spatial-v2")
 HF_OUT_REPO = "dwidlee/systemone-spatial-0.5b"  # change to your namespace
 TRAIN_JSONL = Path("data/phase2_train_colab.jsonl")
 
 if MODE == "smoke":
-    SPATIAL_PER_GAME = 4_000
-    CHESS_TARGET = 4_000
-    GENERAL_TARGET = 4_000
+    TRAIN_LIMIT = 20_000
     BATCH_SIZE = 4
     MAX_LENGTH = 768
     EPOCHS = 1
     MAX_STEPS = None
 elif MODE == "full":
-    SPATIAL_PER_GAME = 35_000
-    CHESS_TARGET = 32_400
-    GENERAL_TARGET = 32_400
+    TRAIN_LIMIT = None
     BATCH_SIZE = 4
     MAX_LENGTH = 768
     EPOCHS = 1
@@ -117,8 +126,9 @@ BASE_MODEL = (
 print(
     dict(
         MODE=MODE,
+        HF_DATA=HF_DATA,
+        TRAIN_LIMIT=TRAIN_LIMIT,
         BASE_MODEL=BASE_MODEL,
-        SPATIAL_PER_GAME=SPATIAL_PER_GAME,
         BATCH_SIZE=BATCH_SIZE,
         MAX_LENGTH=MAX_LENGTH,
         OUT_DIR=str(OUT_DIR),
@@ -127,35 +137,52 @@ print(
 """
         ),
         md(
-            """## 4. Prepare train JSONL
+            """## 4. Download Hub dataset → train JSONL
 
-Builds fresh spatial samples on Colab (bare labels + D₄ where implemented), pulls general from HF, and chess from local file or HF phase2 filter.
+Uses `scripts/hf_phase2_to_jsonl.py` (no on-Colab spatial generation).
 """
         ),
         code(
-            """import subprocess
+            """import json
+import subprocess
+from collections import Counter
 from pathlib import Path
 
 Path("data").mkdir(exist_ok=True)
 cmd = [
     "python",
-    "scripts/prepare_phase2_colab.py",
-    "--spatial-per-game",
-    str(SPATIAL_PER_GAME),
-    "--chess-target",
-    str(CHESS_TARGET),
-    "--general-target",
-    str(GENERAL_TARGET),
+    "scripts/hf_phase2_to_jsonl.py",
+    "--repo",
+    HF_DATA,
+    "--split",
+    "train",
     "--out",
     str(TRAIN_JSONL),
     "--seed",
     "42",
 ]
+if TRAIN_LIMIT:
+    cmd += ["--limit", str(TRAIN_LIMIT)]
 print("Running:", " ".join(cmd))
 subprocess.check_call(cmd)
+
+gyms = Counter()
+n = 0
+banned = ("RECOMMENDED", "BLOCKED", "CRITICAL:", "SAFE:", "Push box", "hazard_nearby")
+hits = 0
+with TRAIN_JSONL.open() as f:
+    for line in f:
+        n += 1
+        if any(b in line for b in banned):
+            hits += 1
+        row = json.loads(line)
+        gyms[(row.get("meta") or {}).get("gym", "?")] += 1
+print("rows", n)
+print("gyms", dict(gyms))
+print("forbidden coaching hits", hits)
 """
         ),
-        md("## 5. Optional Drive checkpoint path (recommended for full)"),
+        md("## 5. Optional Drive checkpoints (recommended for full)"),
         code(
             """USE_DRIVE = MODE == "full"
 
@@ -226,7 +253,7 @@ for script in [
     subprocess.check_call(cmd)
 """
         ),
-        md("## 8. Upload to Hugging Face (optional)"),
+        md("## 8. Upload checkpoint (optional)"),
         code(
             """UPLOAD = False  # set True to push
 

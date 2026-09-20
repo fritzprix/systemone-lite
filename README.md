@@ -302,9 +302,18 @@ Numbers: [Measured results](#mixed-sft-accuracy-option-top-1).
 
 Notebook: [`notebooks/phase2_spatial_training_colab.ipynb`](notebooks/phase2_spatial_training_colab.ipynb).
 
-- Default **smoke** mode (~24k rows, batch 4, `max_length=768`) for free T4.
-- Data prep: `scripts/prepare_phase2_colab.py` (fresh spatial synth on the VM; general/chess from Hub).
-- Full 200k-scale caps need Drive + a long session (~8–10h).
+**Dataset is prebuilt** on the Hub:
+[`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
+(204 800 train / 3 500 test). Colab only downloads JSONL and trains.
+
+```bash
+# Rebuild + re-upload from a machine with the local data/ anchors:
+python scripts/build_phase2_distill.py
+python scripts/upload_phase2_hf.py
+```
+
+- Default **smoke** mode: 20 000-row subset, batch 4, `max_length=768`.
+- **full** mode: entire train split (~51 200 steps) — use Drive + a long session.
 
 ## Chess fine-tuning (Stockfish distill)
 
