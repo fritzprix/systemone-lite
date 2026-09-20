@@ -180,37 +180,35 @@ def generate_2048_samples(
                 break
 
             best_d, _ = best_move_2048(board)
-            grid_ascii = f"\n{board.render_ascii()}\n"
-            empty_count = len(board.empty_cells)
+            # Apply D4 augmentation (rotations & horizontal flip)
+            from systemone_lite.synth.augmentation import apply_d4_transform
+            rot_k = rng.randint(0, 3)
+            flip_h = rng.random() < 0.5
+            aug_grid, aug_best_d = apply_d4_transform(board.grid, best_d, rot_k=rot_k, flip_h=flip_h)
+
+            # Build ASCII from augmented grid
+            aug_board = Board2048(grid=aug_grid)
+            grid_ascii = f"\n{aug_board.render_ascii()}\n"
+            empty_count = len(aug_board.empty_cells)
 
             state = {
                 "grid_map": grid_ascii,
                 "legend": "Numbers represent tile values; '.' represents an empty cell.",
                 "empty_cells_count": empty_count,
-                "highest_tile": board.max_tile,
-                "grid_fullness": "CRITICAL: Under 3 empty cells left" if empty_count <= 2 else "SAFE: Ample empty cells",
+                "highest_tile": aug_board.max_tile,
             }
 
-            # 1. Choice sample: best slide direction
-            options = {
-                d: f"Slide tiles {d}"
-                for d in legal.keys()
-            }
-            for d in ["UP", "DOWN", "LEFT", "RIGHT"]:
-                if d not in options:
-                    options[d] = f"BLOCKED: No tiles can move {d}"
+            # 1. Choice sample: strictly bare directional options
+            options = {d: f"Slide {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"]}
 
             if rng.random() < 0.75:
                 s = choice_sample(
                     task="game2048.slide",
                     state=state,
-                    instructions=(
-                        "Inspect the 4x4 2048 grid. Choose the best slide direction (UP, DOWN, LEFT, RIGHT) "
-                        "to merge tiles cleanly and keep high-value tiles anchored in corners."
-                    ),
+                    instructions="Inspect the 4x4 2048 grid. Choose the slide direction: UP, DOWN, LEFT, RIGHT.",
                     options=options,
-                    label_key=best_d,
-                    meta={"gym": "game2048", "max_tile": board.max_tile},
+                    label_key=aug_best_d,
+                    meta={"gym": "game2048", "max_tile": aug_board.max_tile},
                     rng=rng,
                     hard=hard,
                 )

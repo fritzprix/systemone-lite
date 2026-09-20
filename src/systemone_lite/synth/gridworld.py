@@ -157,33 +157,29 @@ def generate_gridworld_samples(
             if len(samples) >= n_samples:
                 break
 
-            grid_ascii = f"\n{curr_map.render_ascii()}\n"
-            pr, pc = curr_map.player
-            gr, gc = curr_map.goal
-            dist_left = abs(pr - gr) + abs(pc - gc)
+            # Apply D4 augmentation to rendered grid and action
+            from systemone_lite.synth.augmentation import apply_d4_transform
+            rot_k = rng.randint(0, 3)
+            flip_h = rng.random() < 0.5
+            raw_lines = [list(r) for r in curr_map.render_ascii().split("\n") if r]
+            aug_matrix, aug_best_action = apply_d4_transform(raw_lines, best_action, rot_k=rot_k, flip_h=flip_h)
+            aug_grid_map = "\n" + "\n".join("".join(r) for r in aug_matrix) + "\n"
 
             options = {d: f"Move {d}" for d in DIRECTIONS}
 
             state = {
-                "grid_map": grid_ascii,
+                "grid_map": aug_grid_map,
                 "legend": "'#': Wall, '@': Player, 'G': Goal, 'X': Deadly Trap, '.': Floor",
-                "player_position": f"Row {pr}, Col {pc}",
-                "goal_position": f"Row {gr}, Col {gc}",
-                "manhattan_distance": dist_left,
-                "hazard_nearby": curr_map.is_adjacent_to_hazard(),
             }
 
-            # 1. Choice sample
+            # 1. Choice sample: strictly bare directional options
             if rng.random() < 0.70:
                 s = choice_sample(
                     task="gridworld.move",
                     state=state,
-                    instructions=(
-                        "Inspect the 2D GridWorld map. Choose the safest and fastest move direction "
-                        "(UP, DOWN, LEFT, RIGHT) for Player (@) to reach Goal (G) without touching traps (X)."
-                    ),
+                    instructions="Inspect the 2D GridWorld map. Choose the move direction: UP, DOWN, LEFT, RIGHT.",
                     options=options,
-                    label_key=best_action,
+                    label_key=aug_best_action,
                     meta={"gym": "gridworld", "grid_size": f"{h}x{w}"},
                     rng=rng,
                     hard=hard,
@@ -209,6 +205,7 @@ def generate_gridworld_samples(
                 )
 
             # Advance along path
+            pr, pc = curr_map.player
             dr, dc = DIRECTIONS[best_action]
             curr_map.player = (pr + dr, pc + dc)
 

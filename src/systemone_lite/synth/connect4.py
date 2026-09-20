@@ -157,24 +157,22 @@ def generate_connect4_samples(
             opp_player = "Y" if curr_player == "R" else "R"
             best_col = best_move_connect4(board, curr_player)
 
-            grid_ascii = f"\n{board.render_ascii()}\n"
-            threat_col = board.find_immediate_threat(opp_player)
+            # Apply horizontal mirror reflection (gravity invariant)
+            from systemone_lite.synth.augmentation import apply_connect4_mirror
+            mirror_h = rng.random() < 0.5
+            if mirror_h:
+                aug_grid, aug_best_col_1based = apply_connect4_mirror(board.grid, best_col + 1)
+                aug_board = Connect4Board(grid=aug_grid)
+            else:
+                aug_board = board
+                aug_best_col_1based = best_col + 1
 
-            # Build options for columns 1 to 7
-            options = {}
-            for c in range(COLS):
-                col_name = str(c + 1)
-                if c not in legal:
-                    options[col_name] = f"Column {col_name} is full"
-                else:
-                    options[col_name] = f"Drop disc into Column {col_name}"
+            options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
 
             state = {
-                "grid_map": grid_ascii,
+                "grid_map": f"\n{aug_board.render_ascii()}\n",
                 "turn": f"{'Red (R)' if curr_player == 'R' else 'Yellow (Y)'}",
                 "legend": "'R': Red disc, 'Y': Yellow disc, '.': Empty slot. Columns are 1 to 7.",
-                "legal_columns": [c + 1 for c in legal],
-                "immediate_opponent_threat": threat_col is not None,
             }
 
             # 1. Choice sample: column selection
@@ -182,12 +180,9 @@ def generate_connect4_samples(
                 s = choice_sample(
                     task="connect4.drop",
                     state=state,
-                    instructions=(
-                        "Inspect the 7x6 Connect Four board. Choose the best column (1 to 7) to drop your disc. "
-                        "Prioritize winning, blocking opponent 4-in-a-row threats, and controlling the center."
-                    ),
+                    instructions="Inspect the 7x6 Connect Four board. Choose the column (1 to 7) to drop your disc.",
                     options=options,
-                    label_key=str(best_col + 1),
+                    label_key=str(aug_best_col_1based),
                     meta={"gym": "connect4", "turn": curr_player},
                     rng=rng,
                     hard=hard,
@@ -196,6 +191,7 @@ def generate_connect4_samples(
 
             # 2. Noul sample: opponent winning threat
             if len(samples) < n_samples and rng.random() < 0.40:
+                threat_col = aug_board.find_immediate_threat(opp_player)
                 has_threat = threat_col is not None
                 criteria, alias_map = alias_criteria({
                     "yes": "Opponent has a 4-in-a-row threat next turn",

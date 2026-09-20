@@ -296,6 +296,16 @@ systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
 
 Numbers: [Measured results](#mixed-sft-accuracy-option-top-1).
 
+### Phase 2 on Google Colab (T4)
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/fritzprix/systemone-lite/blob/main/notebooks/phase2_spatial_training_colab.ipynb)
+
+Notebook: [`notebooks/phase2_spatial_training_colab.ipynb`](notebooks/phase2_spatial_training_colab.ipynb).
+
+- Default **smoke** mode (~24k rows, batch 4, `max_length=768`) for free T4.
+- Data prep: `scripts/prepare_phase2_colab.py` (fresh spatial synth on the VM; general/chess from Hub).
+- Full 200k-scale caps need Drive + a long session (~8–10h).
+
 ## Chess fine-tuning (Stockfish distill)
 
 Chess rows use `board_2d_map` (labeled 8×8 ASCII), not FEN alone. Prefer the

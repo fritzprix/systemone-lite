@@ -79,7 +79,21 @@ def upsample(rows: list[dict], target: int, rng: random.Random) -> list[dict]:
 
 def validate_dataset(rows: list[dict], name: str = "Dataset") -> None:
     """Rigorous schema and neutrality validation."""
-    forbidden_keywords = ["RECOMMENDED:", "OPTIMAL:", "BLOCK THREAT:"]
+    forbidden_keywords = [
+        "RECOMMENDED",
+        "OPTIMAL",
+        "BLOCK THREAT",
+        "BLOCKED",
+        "CRITICAL:",
+        "SAFE:",
+        "Push box",
+        "Blocked wall",
+        "hazard_nearby",
+        "immediate_opponent_threat",
+        "boxes_placed",
+        "safest and fastest",
+        "Prioritize winning",
+    ]
     aliases_seen = Counter()
     gyms_seen = Counter()
 
@@ -97,7 +111,7 @@ def validate_dataset(rows: list[dict], name: str = "Dataset") -> None:
         text_dump = json.dumps(r, ensure_ascii=False)
         for kw in forbidden_keywords:
             if kw in text_dump:
-                raise ValueError(f"Row {idx} contains forbidden heuristic keyword: {kw}")
+                raise ValueError(f"Row {idx} contains forbidden heuristic/state hint leak: {kw!r}")
 
         # 3. Label validity
         if r["label_alias"] not in criteria:

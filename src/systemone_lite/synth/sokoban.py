@@ -359,39 +359,30 @@ def generate_sokoban_samples(
             if len(samples) >= n_samples:
                 break
 
-            grid_map = f"\n{curr_level.render_ascii()}\n"
-            legal_actions = curr_level.get_legal_actions()
-            if not legal_actions or best_action not in legal_actions:
-                break
+            # Apply D4 augmentation to rendered grid and action
+            from systemone_lite.synth.augmentation import apply_d4_transform
+            rot_k = rng.randint(0, 3)
+            flip_h = rng.random() < 0.5
+            raw_lines = [list(r) for r in curr_level.render_ascii().split("\n") if r]
+            aug_matrix, aug_best_action = apply_d4_transform(raw_lines, best_action, rot_k=rot_k, flip_h=flip_h)
+            aug_grid_map = "\n" + "\n".join("".join(r) for r in aug_matrix) + "\n"
 
             state = {
-                "grid_map": grid_map,
+                "grid_map": aug_grid_map,
                 "legend": "'#': Wall, '@': Player, '$': Box, '.': Target, '*': Box on target",
-                "player_position": f"Row {curr_level.player[0]}, Col {curr_level.player[1]}",
-                "boxes_placed": f"{len(curr_level.boxes & curr_level.targets)} of {len(curr_level.targets)}",
-                "remaining_targets": len(curr_level.targets - curr_level.boxes),
             }
 
-            # 1. Choice sample: which direction to move/push
-            action_options = {}
-            for d in ["UP", "DOWN", "LEFT", "RIGHT"]:
-                if d in legal_actions:
-                    _, _, pushed = legal_actions[d]
-                    action_options[d] = f"Push box {d}" if pushed else f"Walk {d}"
-                else:
-                    action_options[d] = f"Blocked wall or obstacle {d}"
+            # 1. Choice sample: strictly bare directional options (Move UP/DOWN/LEFT/RIGHT)
+            action_options = {d: f"Move {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"]}
 
             # Randomly add choice sample
             if rng.random() < 0.70:
                 s = choice_sample(
                     task="sokoban.direction",
                     state=state,
-                    instructions=(
-                        "Inspect the 2D Sokoban map. Choose the best move direction "
-                        "for player (@) to solve the puzzle without causing a deadlock."
-                    ),
+                    instructions="Inspect the 2D Sokoban map. Choose the move direction: UP, DOWN, LEFT, RIGHT.",
                     options=action_options,
-                    label_key=best_action,
+                    label_key=aug_best_action,
                     meta={"gym": "sokoban", "level_size": f"{curr_level.height}x{curr_level.width}"},
                     rng=rng,
                     hard=hard,
@@ -418,6 +409,9 @@ def generate_sokoban_samples(
                 )
 
             # Advance state along path
+            legal_actions = curr_level.get_legal_actions()
+            if best_action not in legal_actions:
+                break
             next_player, next_boxes, _ = legal_actions[best_action]
             curr_level = SokobanLevel(
                 grid=curr_level.grid,
