@@ -75,28 +75,27 @@ class SokobanGame:
         for d in ["UP", "DOWN", "LEFT", "RIGHT"]:
             if d in legal_actions:
                 _, _, pushed = legal_actions[d]
-                action_options[d] = f"RECOMMENDED: Push box {d}" if pushed else f"Walk {d}"
-            else:
-                action_options[d] = f"BLOCKED: Wall or obstacle {d}"
+                action_options[d] = f"Push box {d}" if pushed else f"Walk {d}"
+        if not action_options:
+            action_options["WAIT"] = "No legal moves"
 
-        # If solver knows next step, put recommended note
+        # If solver knows next step, highlight it
         if self.sol_idx < len(self.solution_path):
             best = self.solution_path[self.sol_idx]
-            if best in action_options and "BLOCKED" not in action_options[best]:
+            if best in action_options:
                 action_options[best] = f"OPTIMAL: {action_options[best]}"
 
-        state = {
-            "grid_map": grid_map,
-            "legend": "'#': Wall, '@': Worker, '$': Box, '.': Storage Goal, '*': Box on Goal",
-            "worker_position": f"Row {self.level.player[0]}, Col {self.level.player[1]}",
-            "boxes_placed": f"{len(self.level.boxes & self.level.targets)} of {len(self.level.targets)}",
-            "is_deadlocked": self.level.has_any_deadlock(),
-        }
+        state = f"""Sokoban 2D Map:
+{self.level.render_ascii()}
+
+Legend: '#' Wall, '@' Worker, '$' Box, '.' Goal, '*' Box on Goal
+Worker Position: Row {self.level.player[0]}, Col {self.level.player[1]}
+Boxes Placed: {len(self.level.boxes & self.level.targets)} of {len(self.level.targets)}
+"""
 
         questions = {
             "direction": choice(
-                "Based on the 2D Sokoban map, choose the best move direction for Worker (@) to push boxes into goals. "
-                "Reply with: UP, DOWN, LEFT, RIGHT",
+                "Based on the 2D Sokoban map, choose the best legal move direction for Worker (@) to push boxes into goals.",
                 action_options,
             ),
             "deadlock_alert": noul(
