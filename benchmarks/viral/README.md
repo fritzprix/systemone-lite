@@ -17,13 +17,11 @@ This directory contains animated visual demos comparing different iterations of 
 | **🔢 2048 Agent** | `viral/v1_mixed_sft/game2048.gif` | 25 steps<br/>Score: 148, Max: 32<br/>~35ms / move | 4-4, 8-8, 16-16 strategic directional merges |
 | **🗺️ GridWorld Hazard** | `viral/v1_mixed_sft/gridworld.gif` | 10 steps (Goal reached 🏆)<br/>~36ms / step | Real-time lava (🔥) hazard avoidance & shortest path navigation |
 | **📦 Sokoban AI** | `viral/v1_mixed_sft/sokoban.gif` | 15 steps<br/>~33ms / step | Raw 2D newline map parsing, legal action masking, box delivered to goal (✅) |
-| **🐍 Snake Agent** | `viral/v1_mixed_sft/snake.gif` | 60 steps (Full survival)<br/>~45ms / step | Real-time wall collision avoidance, boundary turning, survival navigation |
 | **🔴 Connect Four** | `viral/v1_mixed_sft/connect4.gif` | 18 turns<br/>~39ms / turn | 7-column parallel probability HUD and strategic vertical stacking |
 
 ---
 
 ## 🏛️ Version 0.x: Legacy Baselines
-> Early checkpoints prior to unified mixed co-training.
+> Early prototype checkpoints prior to unified mixed co-training.
+> Note: The legacy chess demo (`v0_legacy/systemone_lite_chess.gif`) relied on an un-debiased option ranking (where the top heuristic move was placed at Option 'A' and the model possessed an ~80% token bias towards 'A'). Phase 1 (`v1_mixed_sft`) debiases this with 50:50 randomized training and multi-option evaluation.
 
-* **`v0_legacy/snake_demo.gif`**: Autonomous Snake navigation trained on initial general-only SFT (`dwidlee/systemone-lite-0.5b`).
-* **`v0_legacy/systemone_lite_chess.gif`**: Initial prototype chess policy.

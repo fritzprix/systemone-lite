@@ -16,10 +16,10 @@ criteria / yes–no / score levels). No autoregressive JSON string generation.
 
 ## Visual Demos
 
-| Autonomous Snake (<12ms decision) | Tactical Chess Player (2D spatial context) |
+| Multi-Step Chess Player (2-Stage System 1) | 2048 Strategic Agent (Real-time merge) |
 | :---: | :---: |
-| ![Snake Demo](benchmarks/viral/snake_demo.gif) | ![Chess Demo](benchmarks/viral/chess_proper.gif) |
-| *0.5B LM navigating 2D grid in real-time (~80x vs CoT)* | *2D ASCII board map + debiased candidate ranking* |
+| ![Chess Demo](benchmarks/viral/v1_mixed_sft/chess_multistep.gif) | ![2048 Demo](benchmarks/viral/v1_mixed_sft/game2048.gif) |
+| *Piece selection → Move selection in ~70ms* | *Directional next-token choices reaching Tile 32* |
 
 ## Measured results
 
@@ -357,36 +357,28 @@ python scripts/chess_demo.py --max-plies 10 --gif benchmarks/viral/chess_proper.
 python scripts/chess_demo.py --stub
 ```
 
-Outputs: `benchmarks/viral/chess_proper.gif`, `benchmarks/viral/chess_proper.mp4`
+## 2048 Sliding Tile Agent (Sub-35ms Neural Reflexes)
 
-## Autonomous Snake demo (real-time terminal UI & video)
+Watch System One evaluate 4x4 grid board matrices with corner positioning and monotonicity heuristics in real-time (~35ms latency):
 
-Watch System One act as the real-time 'System 1' brain for an autonomous snake with sub-25ms decisions, option probability distributions, and simultaneous multi-question evaluation (`direction` choice, `danger_level` score, and `food_reachable` noul):
-
-![Autonomous Snake Demo](benchmarks/viral/snake_demo.gif)
+![2048 Agent Demo](benchmarks/viral/v1_mixed_sft/game2048.gif)
 
 ```bash
 # Live interactive terminal demo (real weights)
-python scripts/snake_demo.py
+python scripts/game2048_demo.py --max-steps 30
 
 # Record gameplay to animated GIF
-python scripts/snake_demo.py --max-steps 55 --gif benchmarks/viral/snake_demo.gif
+python scripts/game2048_demo.py --max-steps 25 --gif benchmarks/viral/v1_mixed_sft/game2048.gif
 
 # Instant dry-run (no GPU / no weights download)
-python scripts/snake_demo.py --stub
-
-# Run against a local System One API server
-python scripts/snake_demo.py --base-url http://127.0.0.1:8000
-
-# Benchmark evaluation over 10 games headlessly
-python scripts/snake_demo.py --episodes 10 --quiet
+python scripts/game2048_demo.py --stub
 ```
 
-Outputs: `benchmarks/viral/snake_demo.gif`, `benchmarks/viral/snake_demo.mp4`
+Outputs: `benchmarks/viral/v1_mixed_sft/game2048.gif`
 
 ## Spatial 2D Game Demos & Synthetic Dataset Engine
 
-In addition to Chess and Snake, System One Lite includes full-fledged 2D spatial text-map environments with real-time heuristic/BFS solvers and instant `--stub` execution:
+In addition to Chess, System One Lite includes full-fledged 2D spatial text-map environments with real-time heuristic/BFS solvers and instant `--stub` execution:
 
 ### 1. Sokoban (`sokoban_demo.py`)
 Warehouse box-pushing puzzle with real-time deadlock detection:
