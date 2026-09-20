@@ -96,7 +96,8 @@ Cold start from `Qwen/Qwen2.5-0.5B-Instruct`. Train set:
 Checkpoint: `checkpoints/systemone-mixed-sft` → published as
 [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
 
-Report: [`benchmarks/mixed_vs_base_report.json`](benchmarks/mixed_vs_base_report.json).
+Report: [`benchmarks/mixed_vs_base_report.json`](benchmarks/mixed_vs_base_report.json).  
+Write-up: [`docs/NOTE_MIXED_SFT_2026-09-20.md`](docs/NOTE_MIXED_SFT_2026-09-20.md).
 
 #### General held-out
 
@@ -136,6 +137,7 @@ Absolute chess accuracy remains modest on this debiased harness.
 | Base model | [Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) |
 | System One API (reference) | [docs.typesafe.ai/api.md](https://docs.typesafe.ai/api.md) |
 | Design notes | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
+| Mixed SFT note | [`docs/NOTE_MIXED_SFT_2026-09-20.md`](docs/NOTE_MIXED_SFT_2026-09-20.md) |
 
 ```bash
 systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
