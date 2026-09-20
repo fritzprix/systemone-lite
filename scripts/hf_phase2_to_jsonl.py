@@ -22,20 +22,6 @@ def _parse_jsonish(value: object) -> object:
             try:
                 return json.loads(text)
             except json.JSONDecodeError:
-                return value
-        return value
-    return value
-
-
-def _parse_jsonish(value: object) -> object:
-    if isinstance(value, (dict, list)):
-        return value
-    if isinstance(value, str):
-        text = value.strip()
-        if text[:1] in "{[":
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError:
                 import ast
 
                 try:
