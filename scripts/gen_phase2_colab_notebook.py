@@ -39,7 +39,8 @@ def main() -> None:
 
 **Data is pre-generated.** This notebook downloads
 [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
-(204 800 train / 3 500 test, bare labels + D₄ spatial) and fine-tunes only.
+(204 800 train / 3 500 test: **bare spatial + bare chess**, D₄/mirror aug with `aug_*` meta)
+and fine-tunes only. Do **not** regenerate data on Colab.
 
 | Item | Value |
 |---|---|
