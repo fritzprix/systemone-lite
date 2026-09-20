@@ -178,9 +178,8 @@ class MultiStepChessGame:
         if not grouped:
             raise RuntimeError("No legal moves available")
 
-        # Rank candidate origin squares by activity & tactical value
-        sorted_origins = sorted(grouped.keys(), key=lambda sq: _score_origin(self.board, sq), reverse=True)
-        # Cap to top 8 origin pieces for sharp multi-choice
+        # Order candidate origin squares neutrally by square name without heuristic bias
+        sorted_origins = sorted(grouped.keys())
         top_origins = sorted_origins[:8]
 
         origin_options = {sq: describe_piece(self.board, sq) for sq in top_origins}
@@ -215,8 +214,8 @@ class MultiStepChessGame:
             # Fallback if square has no legal moves
             dest_moves = list(self.board.legal_moves)
 
-        # Rank destinations for this piece by tactical priority
-        sorted_moves = sorted(dest_moves, key=lambda m: _score_target(self.board, m), reverse=True)
+        # Order destinations neutrally by UCI string without heuristic bias
+        sorted_moves = sorted(dest_moves, key=lambda m: m.uci())
         top_moves = sorted_moves[:8]
 
         move_options = {m.uci(): describe_move(self.board, m) for m in top_moves}

@@ -14,12 +14,11 @@ criteria / yes–no / score levels). No autoregressive JSON string generation.
 (mixed gyms + chess, from base):
 [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
 
-## Visual Demos
+## Key Capabilities & Design Principles
 
-| Multi-Step Chess Player (2-Stage System 1) | 2048 Strategic Agent (Real-time merge) |
-| :---: | :---: |
-| ![Chess Demo](benchmarks/viral/v1_mixed_sft/chess_multistep.gif) | ![2048 Demo](benchmarks/viral/v1_mixed_sft/game2048.gif) |
-| *Piece selection → Move selection in ~70ms* | *Directional next-token choices reaching Tile 32* |
+* **⚡ Ultra-Low Latency (~10ms–35ms)**: Evaluates multiple structured questions simultaneously via next-token option-restricted softmax with shared KV cache prefix, achieving **17× to 35× speedup** over autoregressive JSON generation.
+* **🎯 Pure Unbiased Evaluation**: No keyword prompt hacks (`RECOMMENDED`, `OPTIMAL`) or heuristic option order shortcuts. All evaluations rely on raw state representation and neutral option sets.
+* **🗺️ 2D Spatial Environments**: Includes procedural Sokoban, 2048, GridWorld, Connect Four, and Chess environments with synthetic trajectory generation for Phase 2 spatial representation learning.
 
 ## Measured results
 
@@ -328,53 +327,19 @@ Labels: Stockfish when available (`/usr/games/stockfish` on Ubuntu), else a
 tactical heuristic. Mixed vs base numbers:
 [Measured results](#chess-move-2d-board--shuffled-options).
 
-## Viral chess demo (local video)
+## Interactive Demos & Dry-Runs
 
-```bash
-pip install -e ".[viral]"
+System One Lite provides terminal-based interactive environments with live telemetry, ANSI rendering, and `--stub` dry-run modes (which run instantly on CPU without downloading weights):
 
-python scripts/chess_viral_demo.py --plies 20 --fps 12 \
-  --model checkpoints/chess-sft
-```
-
-Outputs: `benchmarks/viral/systemone_lite_chess.mp4`, `.gif`  
-Dry-run: `python scripts/chess_viral_demo.py --stub --plies 6`
-
-## Tactical Chess demo (2D board & semantic reasoning)
-
-Proper autonomous chess player featuring 2D ASCII board context, semantic tactical candidate ranking (eliminating option 'A' bias), and multi-question evaluation:
-
-![Tactical Chess Demo](benchmarks/viral/chess_proper.gif)
-
+### 1. Multi-Step Chess Player (`chess_multistep_demo.py`)
+Two-stage System 1 decision pipeline (Stage 1 Piece Selection → Stage 2 Destination Selection):
 ```bash
 # Live interactive terminal demo (real weights)
-python scripts/chess_demo.py --max-plies 20
-
-# Record gameplay to animated GIF
-python scripts/chess_demo.py --max-plies 10 --gif benchmarks/viral/chess_proper.gif
+python scripts/chess_multistep_demo.py --max-plies 20
 
 # Instant dry-run (no GPU / no weights download)
-python scripts/chess_demo.py --stub
+python scripts/chess_multistep_demo.py --stub
 ```
-
-## 2048 Sliding Tile Agent (Sub-35ms Neural Reflexes)
-
-Watch System One evaluate 4x4 grid board matrices with corner positioning and monotonicity heuristics in real-time (~35ms latency):
-
-![2048 Agent Demo](benchmarks/viral/v1_mixed_sft/game2048.gif)
-
-```bash
-# Live interactive terminal demo (real weights)
-python scripts/game2048_demo.py --max-steps 30
-
-# Record gameplay to animated GIF
-python scripts/game2048_demo.py --max-steps 25 --gif benchmarks/viral/v1_mixed_sft/game2048.gif
-
-# Instant dry-run (no GPU / no weights download)
-python scripts/game2048_demo.py --stub
-```
-
-Outputs: `benchmarks/viral/v1_mixed_sft/game2048.gif`
 
 ## Spatial 2D Game Demos & Synthetic Dataset Engine
 
@@ -425,7 +390,7 @@ python scripts/build_spatial_distill.py \
 src/systemone_lite/   # schema, prompt, infer (prefix cache), API, client, synth/
 tests/
 scripts/              # demo, latency, train/eval, HF upload
-benchmarks/           # latency + held-out JSON (+ viral clips)
+benchmarks/           # latency + held-out JSON evaluations
 openapi/
 docs/PROPOSAL.md
 ```

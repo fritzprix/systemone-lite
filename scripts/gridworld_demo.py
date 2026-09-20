@@ -67,18 +67,7 @@ class GridWorldSession:
         pr, pc = self.map.player
         gr, gc = self.map.goal
         dist = abs(pr - gr) + abs(pc - gc)
-
-        options = {}
-        for d, (dr, dc) in DIRECTIONS.items():
-            nr, nc = pr + dr, pc + dc
-            if not (0 <= nr < self.map.height and 0 <= nc < self.map.width) or self.map.grid[nr][nc] == "#":
-                options[d] = f"BLOCKED: Wall {d}"
-            elif (nr, nc) in self.map.hazards:
-                options[d] = f"DEADLY: Lava trap {d}"
-            elif d == best_dir:
-                options[d] = f"RECOMMENDED: Move {d} towards goal"
-            else:
-                options[d] = f"SAFE: Move {d}"
+        options = {d: f"Move {d}" for d in DIRECTIONS}
 
         state = {
             "grid_map": grid_ascii,

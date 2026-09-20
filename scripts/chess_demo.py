@@ -163,8 +163,8 @@ def analyze_legal_moves(board: chess.Board) -> list[CandidateMove]:
             )
         )
 
-    # Sort candidates by tactical priority
-    candidates.sort(key=lambda c: c.priority_score, reverse=True)
+    # Order candidates neutrally by UCI move notation without heuristic bias
+    candidates.sort(key=lambda c: c.uci)
     return candidates
 
 

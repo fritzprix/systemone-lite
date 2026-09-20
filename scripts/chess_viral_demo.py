@@ -156,8 +156,8 @@ def decide_move(client: SystemOneClient, board: chess.Board) -> tuple[chess.Move
 
     state = board_to_state(board)
 
-    # Sort origins by tactical/central priority instead of alphabetical
-    origin_keys = sorted(grouped.keys(), key=lambda sq: _score_origin(board, sq), reverse=True)
+    # Sort origins neutrally instead of heuristic priority
+    origin_keys = sorted(grouped.keys())
     origin_raw = {sq: describe_piece(board, sq) for sq in origin_keys}
     origin_criteria, origin_alias = _alias_criteria(origin_raw)
     step1 = client.system_one(
@@ -177,8 +177,8 @@ def decide_move(client: SystemOneClient, board: chess.Board) -> tuple[chess.Move
     }
     origin_conf = step1.answers["piece"].confidence
 
-    # Sort target moves by tactical priority (checks, captures, center control)
-    targets = sorted(grouped[origin], key=lambda m: _score_target(board, m), reverse=True)
+    # Sort target moves neutrally by UCI
+    targets = sorted(grouped[origin], key=lambda m: m.uci())
     target_raw: dict[str, str] = {}
     uci_to_move: dict[str, chess.Move] = {}
     for move in targets:

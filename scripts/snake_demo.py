@@ -244,23 +244,10 @@ class SnakeGame:
         closer_moves = [d for d, a in analyses.items() if a.is_closer and a.is_safe]
         safe_moves = [d for d, a in analyses.items() if a.is_safe]
 
-        # Prioritize criteria order: recommended moves first, then other safe moves
-        sorted_dirs = sorted(
-            ["UP", "DOWN", "LEFT", "RIGHT"],
-            key=lambda d: (not analyses[d].is_safe, not analyses[d].is_closer)
-        )
-        safe_dirs = [d for d in sorted_dirs if analyses[d].is_safe]
-        if not safe_dirs:
-            safe_dirs = sorted_dirs
-
-        alias_to_dir: dict[str, str] = {d: d for d in safe_dirs}
-        criteria: dict[str, str] = {}
-        for dname in safe_dirs:
-            analysis = analyses[dname]
-            if analysis.is_closer:
-                criteria[dname] = f"RECOMMENDED: Move {dname} directly towards food ({analysis.summary()})"
-            else:
-                criteria[dname] = f"SAFE: Move {dname} open path ({analysis.summary()})"
+        # Standard directional options without heuristic sorting or hints
+        all_dirs = ["UP", "DOWN", "LEFT", "RIGHT"]
+        alias_to_dir = {d: d for d in all_dirs}
+        criteria = {d: f"Move {d}" for d in all_dirs}
 
         state = f"""Snake Grid Map:
 {grid_ascii}

@@ -77,12 +77,10 @@ class Game2048Session:
     def build_systemone_payload(self) -> tuple[dict[str, Any], dict[str, Any]]:
         grid_ascii = f"\n{self.board.render_ascii()}\n"
         legal = self.board.get_legal_moves()
-        best_d, _ = best_move_2048(self.board)
-
         options = {}
         for d in ["UP", "DOWN", "LEFT", "RIGHT"]:
             if d in legal:
-                options[d] = f"RECOMMENDED: Slide {d} to merge" if d == best_d else f"Slide {d}"
+                options[d] = f"Slide tiles {d}"
             else:
                 options[d] = f"BLOCKED: No tiles move {d}"
 

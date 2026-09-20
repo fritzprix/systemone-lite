@@ -72,13 +72,9 @@ class Connect4GameSession:
         for c in range(COLS):
             col_key = str(c + 1)
             if c not in legal:
-                options[col_key] = f"FULL: Column {col_key} full"
-            elif c == best_col:
-                options[col_key] = f"RECOMMENDED: Drop in Col {col_key}"
-            elif c == threat_col:
-                options[col_key] = f"BLOCK THREAT: Col {col_key}"
+                options[col_key] = f"Column {col_key} is full"
             else:
-                options[col_key] = f"Drop in Col {col_key}"
+                options[col_key] = f"Drop disc into column {col_key}"
 
         grid_ascii = f"\n{self.board.render_ascii()}\n"
         player_name = "Red (🔴)" if curr_player == "R" else "Yellow (🟡)"

@@ -79,12 +79,6 @@ class SokobanGame:
         if not action_options:
             action_options["WAIT"] = "No legal moves"
 
-        # If solver knows next step, highlight it
-        if self.sol_idx < len(self.solution_path):
-            best = self.solution_path[self.sol_idx]
-            if best in action_options:
-                action_options[best] = f"OPTIMAL: {action_options[best]}"
-
         state = f"""Sokoban 2D Map:
 {self.level.render_ascii()}
 
