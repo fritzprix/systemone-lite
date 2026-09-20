@@ -20,6 +20,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from systemone_lite import SystemOneClient, choice
+from systemone_lite.chess_data import board_state
 from systemone_lite.infer import reset_engine, set_default_model
 from systemone_lite.stub import StubEngine
 
@@ -78,13 +79,7 @@ FONT_HUGE = _font(72)
 
 
 def board_to_state(board: chess.Board) -> dict:
-    return {
-        "fen": board.fen(),
-        "turn": "white" if board.turn == chess.WHITE else "black",
-        "fullmove": board.fullmove_number,
-        "legal_move_count": board.legal_moves.count(),
-        "in_check": board.is_check(),
-    }
+    return board_state(board)
 
 
 def legal_by_origin(board: chess.Board) -> dict[str, list[chess.Move]]:
@@ -101,7 +96,38 @@ def describe_piece(board: chess.Board, square_name: str) -> str:
     if piece is None:
         return square_name
     color = "white" if piece.color == chess.WHITE else "black"
-    return f"{color} {chess.piece_name(piece.piece_type)} on {square_name}"
+    desc = f"{color} {chess.piece_name(piece.piece_type)} on {square_name}"
+    file = chess.square_file(square)
+    if file in (3, 4):
+        desc += " (central piece)"
+    return desc
+
+
+def _score_origin(board: chess.Board, sq_name: str) -> float:
+    sq = chess.parse_square(sq_name)
+    piece = board.piece_at(sq)
+    if piece is None:
+        return 0.0
+    s = 0.0
+    file = chess.square_file(sq)
+    if file in (3, 4):  # d or e file
+        s += 25.0
+    elif file in (2, 5):  # c or f file
+        s += 12.0
+    if piece.piece_type in (chess.KNIGHT, chess.BISHOP):
+        s += 18.0
+    return s
+
+
+def _score_target(board: chess.Board, move: chess.Move) -> float:
+    s = 0.0
+    if board.gives_check(move):
+        s += 50.0
+    if board.is_capture(move):
+        s += 35.0
+    if move.to_square in (chess.E4, chess.D4, chess.E5, chess.D5):
+        s += 25.0
+    return s
 
 
 def _alias_criteria(options: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
@@ -130,7 +156,9 @@ def decide_move(client: SystemOneClient, board: chess.Board) -> tuple[chess.Move
 
     state = board_to_state(board)
 
-    origin_raw = {sq: describe_piece(board, sq) for sq in sorted(grouped.keys())}
+    # Sort origins by tactical/central priority instead of alphabetical
+    origin_keys = sorted(grouped.keys(), key=lambda sq: _score_origin(board, sq), reverse=True)
+    origin_raw = {sq: describe_piece(board, sq) for sq in origin_keys}
     origin_criteria, origin_alias = _alias_criteria(origin_raw)
     step1 = client.system_one(
         state=state,
@@ -149,7 +177,8 @@ def decide_move(client: SystemOneClient, board: chess.Board) -> tuple[chess.Move
     }
     origin_conf = step1.answers["piece"].confidence
 
-    targets = grouped[origin]
+    # Sort target moves by tactical priority (checks, captures, center control)
+    targets = sorted(grouped[origin], key=lambda m: _score_target(board, m), reverse=True)
     target_raw: dict[str, str] = {}
     uci_to_move: dict[str, chess.Move] = {}
     for move in targets:
@@ -161,6 +190,8 @@ def decide_move(client: SystemOneClient, board: chess.Board) -> tuple[chess.Move
             note += f", capture {chess.piece_name(captured.piece_type)}"
         if move.promotion:
             note += f", promote to {chess.piece_name(move.promotion)}"
+        if move.to_square in (chess.E4, chess.D4, chess.E5, chess.D5):
+            note += ", controls center"
         target_raw[key] = note
         uci_to_move[key] = move
 

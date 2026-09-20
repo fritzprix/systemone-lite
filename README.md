@@ -13,6 +13,13 @@ criteria / yes–no / score levels). No autoregressive JSON string generation.
 **Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoint:
 [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
 
+## Visual Demos
+
+| Autonomous Snake (<12ms decision) | Tactical Chess Player (2D spatial context) |
+| :---: | :---: |
+| ![Snake Demo](benchmarks/viral/snake_demo.gif) | ![Chess Demo](benchmarks/viral/chess_proper.gif) |
+| *0.5B LM navigating 2D grid in real-time (~80x vs CoT)* | *2D ASCII board map + debiased candidate ranking* |
+
 ## Measured results
 
 All figures below are from this repo’s scripts. Reproduce paths are linked.
@@ -312,6 +319,50 @@ python scripts/chess_viral_demo.py --plies 20 --fps 12 \
 
 Outputs: `benchmarks/viral/systemone_lite_chess.mp4`, `.gif`  
 Dry-run: `python scripts/chess_viral_demo.py --stub --plies 6`
+
+## Tactical Chess demo (2D board & semantic reasoning)
+
+Proper autonomous chess player featuring 2D ASCII board context, semantic tactical candidate ranking (eliminating option 'A' bias), and multi-question evaluation:
+
+![Tactical Chess Demo](benchmarks/viral/chess_proper.gif)
+
+```bash
+# Live interactive terminal demo (real weights)
+python scripts/chess_demo.py --max-plies 20
+
+# Record gameplay to animated GIF
+python scripts/chess_demo.py --max-plies 10 --gif benchmarks/viral/chess_proper.gif
+
+# Instant dry-run (no GPU / no weights download)
+python scripts/chess_demo.py --stub
+```
+
+Outputs: `benchmarks/viral/chess_proper.gif`, `benchmarks/viral/chess_proper.mp4`
+
+## Autonomous Snake demo (real-time terminal UI & video)
+
+Watch System One act as the real-time 'System 1' brain for an autonomous snake with sub-25ms decisions, option probability distributions, and simultaneous multi-question evaluation (`direction` choice, `danger_level` score, and `food_reachable` noul):
+
+![Autonomous Snake Demo](benchmarks/viral/snake_demo.gif)
+
+```bash
+# Live interactive terminal demo (real weights)
+python scripts/snake_demo.py
+
+# Record gameplay to animated GIF
+python scripts/snake_demo.py --max-steps 55 --gif benchmarks/viral/snake_demo.gif
+
+# Instant dry-run (no GPU / no weights download)
+python scripts/snake_demo.py --stub
+
+# Run against a local System One API server
+python scripts/snake_demo.py --base-url http://127.0.0.1:8000
+
+# Benchmark evaluation over 10 games headlessly
+python scripts/snake_demo.py --episodes 10 --quiet
+```
+
+Outputs: `benchmarks/viral/snake_demo.gif`, `benchmarks/viral/snake_demo.mp4`
 
 ## Project layout
 

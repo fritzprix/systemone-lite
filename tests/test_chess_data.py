@@ -25,3 +25,16 @@ def test_heuristic_samples_have_labels() -> None:
     assert move.label_alias in move.criteria
     best = heuristic_best_move(board)
     assert move.label_key == best.uci()
+    assert "board_2d_map" in move.state
+    assert "a b c d e f g h" in move.state["board_2d_map"]
+    assert "r n b q k b n r" in move.state["board_2d_map"]
+
+
+def test_samples_are_debiased() -> None:
+    board = chess.Board()
+    aliases = set()
+    for i in range(20):
+        samples = build_samples_for_position(board, engine_path=None, include_stages=False)
+        aliases.add(samples[0].label_alias)
+    # With 20 legal moves in starting position, 20 draws should cover multiple distinct aliases
+    assert len(aliases) > 1

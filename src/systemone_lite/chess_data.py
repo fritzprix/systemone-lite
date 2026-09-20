@@ -43,13 +43,41 @@ def find_stockfish() -> str | None:
     return None
 
 
+def render_board_ascii(board: chess.Board) -> str:
+    """8×8 ASCII board with file/rank labels (for LM spatial context)."""
+    lines = ["  a b c d e f g h"]
+    for rank in range(7, -1, -1):
+        row = [f"{rank + 1}"]
+        for file in range(8):
+            sq = chess.square(file, rank)
+            piece = board.piece_at(sq)
+            row.append(piece.symbol() if piece else ".")
+        row.append(f"{rank + 1}")
+        lines.append(" ".join(row))
+    lines.append("  a b c d e f g h")
+    return "\n".join(lines)
+
+
 def board_state(board: chess.Board) -> dict[str, Any]:
+    """Application state for System One chess prompts.
+
+    Always include a labeled 2D map. FEN alone is a dense encoding that small
+    LMs struggle to unpack into line/diagonal geometry (same class of failure
+    as injecting coordinate lists without a grid).
+    """
+    turn = "white" if board.turn == chess.WHITE else "black"
     return {
+        "board_2d_map": f"\n{render_board_ascii(board)}\n",
         "fen": board.fen(),
-        "turn": "white" if board.turn == chess.WHITE else "black",
+        "side_to_move": turn,
+        "turn": turn,
         "fullmove": board.fullmove_number,
         "legal_move_count": board.legal_moves.count(),
         "in_check": board.is_check(),
+        "legend": (
+            "Uppercase=White, lowercase=Black; "
+            "KQRBNP / kqrbnp; '.' = empty. Rows are ranks 8→1."
+        ),
     }
 
 
@@ -74,6 +102,13 @@ def describe_move(board: chess.Board, move: chess.Move) -> str:
         note += ", castle"
     if board.gives_check(move):
         note += ", check"
+    if to_sq in ["e4", "d4", "e5", "d5"]:
+        note += ", controls center"
+    mover = board.piece_at(move.from_square)
+    if mover and mover.piece_type in (chess.KNIGHT, chess.BISHOP):
+        from_rank = chess.square_rank(move.from_square)
+        if (mover.color == chess.WHITE and from_rank == 0) or (mover.color == chess.BLACK and from_rank == 7):
+            note += ", develops minor piece"
     return note
 
 
@@ -194,18 +229,18 @@ class DistillSample:
 
 
 MOVE_INSTRUCTIONS = (
-    "Choose the best legal chess move for the side to move. "
+    "Use board_2d_map (ranks/files). Choose the best legal chess move. "
     "Prefer development, center control, tactics, and king safety. "
     "Reply with exactly one option letter from Criteria."
 )
 
 PIECE_INSTRUCTIONS = (
-    "Pick one piece that should move this turn. Prefer development, "
+    "Use board_2d_map. Pick one piece that should move this turn. Prefer development, "
     "center control, and king safety. Reply with the option letter."
 )
 
 DEST_INSTRUCTIONS = (
-    "A piece is already selected. Choose the best legal destination. "
+    "Use board_2d_map. A piece is already selected. Choose the best legal destination. "
     "Reply with the option letter."
 )
 
@@ -213,21 +248,26 @@ DEST_INSTRUCTIONS = (
 def build_samples_for_position(
     board: chess.Board,
     *,
-    engine_path: str | None,
+    engine_path: str | None = None,
     movetime_ms: int = 50,
     include_stages: bool = True,
     engine: chess.engine.SimpleEngine | None = None,
+    best_move: chess.Move | None = None,
+    source: str = "stockfish",
 ) -> list[DistillSample]:
     moves = list(board.legal_moves)
     if not moves:
         return []
 
-    best, source = label_best_move(
-        board,
-        engine_path=engine_path,
-        movetime_ms=movetime_ms,
-        engine=engine,
-    )
+    if best_move is None:
+        best, source = label_best_move(
+            board,
+            engine_path=engine_path,
+            movetime_ms=movetime_ms,
+            engine=engine,
+        )
+    else:
+        best = best_move
     state = board_state(board)
     samples: list[DistillSample] = []
 
@@ -237,6 +277,7 @@ def build_samples_for_position(
         others = [m for m in moves if m != best]
         random.shuffle(others)
         moves = [best] + others[:25]
+    random.shuffle(moves)
 
     move_opts = {m.uci(): describe_move(board, m) for m in moves}
     criteria, alias_to_key = alias_criteria(move_opts)
@@ -251,7 +292,7 @@ def build_samples_for_position(
             criteria=criteria,
             label_alias=key_to_alias[best.uci()],
             label_key=best.uci(),
-            meta={"label_source": source, "n_options": len(criteria)},
+                meta={"label_source": source, "n_options": len(criteria), "gym": "chess"},
         )
     )
 
@@ -260,7 +301,9 @@ def build_samples_for_position(
 
     origin = chess.square_name(best.from_square)
     grouped = legal_by_origin(board)
-    origin_opts = {sq: describe_piece(board, sq) for sq in sorted(grouped)}
+    origin_keys = list(grouped.keys())
+    random.shuffle(origin_keys)
+    origin_opts = {sq: describe_piece(board, sq) for sq in origin_keys}
     o_crit, o_alias = alias_criteria(origin_opts)
     o_key_to_alias = {v: k for k, v in o_alias.items()}
     if origin in o_key_to_alias:
@@ -272,11 +315,12 @@ def build_samples_for_position(
                 criteria=o_crit,
                 label_alias=o_key_to_alias[origin],
                 label_key=origin,
-                meta={"label_source": source, "best_uci": best.uci()},
+                meta={"label_source": source, "best_uci": best.uci(), "gym": "chess"},
             )
         )
 
-    dest_moves = grouped[origin]
+    dest_moves = list(grouped[origin])
+    random.shuffle(dest_moves)
     dest_opts = {m.uci(): describe_move(board, m) for m in dest_moves}
     d_crit, d_alias = alias_criteria(dest_opts)
     d_key_to_alias = {v: k for k, v in d_alias.items()}
@@ -292,7 +336,7 @@ def build_samples_for_position(
                 criteria=d_crit,
                 label_alias=d_key_to_alias[best.uci()],
                 label_key=best.uci(),
-                meta={"label_source": source, "selected_piece": origin},
+                meta={"label_source": source, "selected_piece": origin, "gym": "chess"},
             )
         )
 

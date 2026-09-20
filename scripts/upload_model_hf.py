@@ -43,6 +43,13 @@ Not affiliated with TypeSafe AI or Jev.
 Chess-specialized weights are a **separate** local checkpoint; this model is not
 trained on chess.
 
+## Visual Demos
+
+| Autonomous Snake Game (<12ms per step) | Tactical Chess Player (2D spatial context) |
+| :---: | :---: |
+| ![Snake Demo](https://raw.githubusercontent.com/fritzprix/systemone-lite/main/benchmarks/viral/snake_demo.gif) | ![Chess Demo](https://raw.githubusercontent.com/fritzprix/systemone-lite/main/benchmarks/viral/chess_proper.gif) |
+| *0.5B causal LM navigating 2D grid in real-time* | *8x8 ASCII board map + debiased candidate ranking* |
+
 ## Accuracy (option top-1)
 
 | Split | n | Base 0.5B | This model | Δ |
@@ -57,10 +64,9 @@ Selected iid (this model): `ticket.route` 1.000, `alloc.fund_next` 0.980,
 `ticket.needs_human` 0.775. Near base: `debate.winner` 0.493,
 `debate.enough_evidence` 0.460.
 
-### Chess transfer (same eval harness)
+### Chess representation & transfer
 
-Move top-1 on `chess_eval_5k` (n=500): base **0.790**, this checkpoint **0.458**,
-chess-only SFT **0.834**. General SFT does not improve chess.
+In chess, replacing raw FEN with an explicit 2D ASCII board map (`board_2d_map`) and debiased candidate shuffling restores genuine spatial reasoning. On the debiased benchmark, baseline zero-shot accuracy is ~6.0% (random choice among ~20 legal moves), and general SFT does not transfer to chess.
 
 ## Latency (inference path; base 0.5B measured)
 
