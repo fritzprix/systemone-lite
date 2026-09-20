@@ -168,19 +168,55 @@ print("Running:", " ".join(cmd))
 subprocess.check_call(cmd)
 
 gyms = Counter()
+aug_meta = Counter()
 n = 0
-banned = ("RECOMMENDED", "BLOCKED", "CRITICAL:", "SAFE:", "Push box", "hazard_nearby")
-hits = 0
+banned = (
+    "RECOMMENDED",
+    "OPTIMAL",
+    "BLOCK THREAT",
+    "BLOCKED",
+    "CRITICAL:",
+    "SAFE:",
+    "Push box",
+    "hazard_nearby",
+    "immediate_opponent_threat",
+    "capture ",
+    ", capture",
+    "develops minor",
+    "controls center",
+    "DELIVERS CHECK",
+    "CAPTURES enemy",
+)
+hits = Counter()
 with TRAIN_JSONL.open() as f:
     for line in f:
         n += 1
-        if any(b in line for b in banned):
-            hits += 1
+        for b in banned:
+            if b in line:
+                hits[b] += 1
         row = json.loads(line)
-        gyms[(row.get("meta") or {}).get("gym", "?")] += 1
+        meta = row.get("meta") or {}
+        gyms[meta.get("gym", "?")] += 1
+        for k in ("aug_rot_k", "aug_flip_h", "aug_mirror_h"):
+            if k in meta:
+                aug_meta[k] += 1
 print("rows", n)
 print("gyms", dict(gyms))
-print("forbidden coaching hits", hits)
+print("aug meta", dict(aug_meta))
+print("forbidden coaching hits", dict(hits))
+if hits:
+    raise SystemExit("Dirty coaching strings found — Hub dataset is stale; rebuild/upload phase2")
+# Chess criteria should look like "e2e4: to e4"
+chess_shown = 0
+with TRAIN_JSONL.open() as f:
+    for line in f:
+        row = json.loads(line)
+        if (row.get("meta") or {}).get("gym") != "chess":
+            continue
+        print("chess criteria sample:", list(row.get("criteria", {}).values())[:4])
+        chess_shown += 1
+        if chess_shown >= 2:
+            break
 """
         ),
         md("## 5. Optional Drive checkpoints (recommended for full)"),
