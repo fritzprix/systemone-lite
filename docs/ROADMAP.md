@@ -50,8 +50,12 @@ flowchart LR
     - **GridWorld**: 장애물 최단 경로 및 목표 탐색 (BFS 증류)
     - **Connect Four**: 중력/선형 패턴 수 싸움 및 4목 판정
   - [x] 인터랙티브 터미널 데모 구축 (`scripts/*_demo.py`)
+  - [ ] **기하학적 대칭성 데이터 증강 ($D_4$ Dihedral Group Augmentation)**:
+    - **GridWorld, Sokoban, 2048**: 8방 대칭(90°/180°/270° 회전 4종 + 반전 4종) 적용으로 LLM의 좌상단 편향 파괴 및 8배 데이터 효율화
+    - **Connect Four**: 중력 제약을 고려한 좌우 거울상(Mirror) 2배 증강
+    - 회전에 따른 동형 행동 변환(Isomorphic Action Permutation, 예: `UP`→`RIGHT` 등) 엔진 구현
   - [ ] **Spatial + Chess + General 통합 v2 데이터셋 구축** 및 Co-training
-  - [ ] 2D 공간 추론 벤치마크 평가 슈트 구축
+  - [ ] 2D 공간 추론 및 회전 불변성(Rotation Invariance) 벤치마크 평가 슈트 구축
 
 ---
 
