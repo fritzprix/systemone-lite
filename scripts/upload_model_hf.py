@@ -9,7 +9,7 @@ from pathlib import Path
 from huggingface_hub import HfApi, create_repo
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DIR = ROOT / "checkpoints" / "systemone-sft"
+DEFAULT_DIR = ROOT / "checkpoints" / "systemone-mixed-sft"
 DEFAULT_REPO = "dwidlee/systemone-lite-0.5b"
 
 MODEL_CARD = """---
@@ -20,6 +20,7 @@ tags:
   - system-one
   - decision
   - qwen2.5
+  - chess
 datasets:
   - dwidlee/systemone-lite-general
 ---
@@ -27,75 +28,57 @@ datasets:
 # systemone-lite-0.5b
 
 Fine-tuned weights for [`systemone-lite`](https://github.com/fritzprix/systemone-lite):
-typed decisions via next-token scoring over option aliases
-(`choice` / encoded `noul` / `score`).
+typed decisions via next-token scoring over option aliases.
 
 Not affiliated with TypeSafe AI or Jev.
 
 | Item | Value |
 |---|---|
 | Base | `Qwen/Qwen2.5-0.5B-Instruct` (Apache-2.0) |
-| Data | [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
-| Train size | 32 400 rows (ticket / alloc / debate) |
-| Recipe | 1 epoch, batch size 3, gym-stratified batches, 10 800 steps |
+| Train data | `mixed_train.jsonl` — ticket / alloc / debate + chess |
+| Mix | 43 200 rows; **10 800 per gym** (chess upsampled from 4 500) |
+| Chess state | `board_2d_map` (8×8 ASCII with ranks/files), not FEN-only |
+| Recipe | cold start from base; 1 epoch; batch 4; stratified; 10 800 steps |
 | Loss | Cross-entropy on the labeled option alias token |
+| Local path | `checkpoints/systemone-mixed-sft` |
 
-Chess-specialized weights are a **separate** local checkpoint; this model is not
-trained on chess.
+## Accuracy vs base (option top-1)
 
-## Visual Demos
+Source: repo `benchmarks/mixed_vs_base_report.json`.
 
-| Autonomous Snake Game (<12ms per step) | Tactical Chess Player (2D spatial context) |
-| :---: | :---: |
-| ![Snake Demo](https://raw.githubusercontent.com/fritzprix/systemone-lite/main/benchmarks/viral/snake_demo.gif) | ![Chess Demo](https://raw.githubusercontent.com/fritzprix/systemone-lite/main/benchmarks/viral/chess_proper.gif) |
-| *0.5B causal LM navigating 2D grid in real-time* | *8x8 ASCII board map + debiased candidate ranking* |
+### General
 
-## Accuracy (option top-1)
-
-| Split | n | Base 0.5B | This model | Δ |
+| Split | n | Base | This model | Δ |
 |---|---:|---:|---:|---:|
-| iid (`test`) | 3600 | 0.439 | 0.679 | +0.240 |
-| hard (`test_hard`) | 5400 | 0.427 | 0.652 | +0.225 |
+| iid | 3600 | 0.439 | **0.781** | +0.343 |
+| hard | 5400 | 0.427 | **0.733** | +0.307 |
 
-Hard: alternate state layouts, option subsets, paraphrases (same label rules).
-Repo reports: `benchmarks/general_*_eval*.json`.
+Selected iid: `ticket.route` 1.000, `ticket.urgency` 0.965,
+`ticket.needs_human` 0.985, `alloc.fund_next` 0.975, `debate.winner` 0.810.
 
-Selected iid (this model): `ticket.route` 1.000, `alloc.fund_next` 0.980,
-`ticket.needs_human` 0.775. Near base: `debate.winner` 0.493,
-`debate.enough_evidence` 0.460.
+### Chess move (2D + shuffled options, n=500)
 
-### Chess representation & transfer
+| Checkpoint | Accuracy |
+|---|---:|
+| Base | 0.050 |
+| This model | **0.236** |
 
-In chess, replacing raw FEN with an explicit 2D ASCII board map (`board_2d_map`) and debiased candidate shuffling restores genuine spatial reasoning. On the debiased benchmark, baseline zero-shot accuracy is ~6.0% (random choice among ~20 legal moves), and general SFT does not transfer to chess.
+Eval uses labeled `board_2d_map` and shuffled letter aliases. Fixed-order /
+FEN-only harnesses previously inflated base scores via option-order bias.
 
-## Latency (inference path; base 0.5B measured)
+## Latency (same 0.5B inference path)
 
-In-process on **RTX 3060**, warmup excluded. Same scoring path this checkpoint
-uses (0.5B forward dominates latency).
-
-**Option scoring** vs **AR JSON** (`model.generate` greedy multi-field JSON,
-full vocab). Source: repo `benchmarks/latency_vs_ar.json`.
+In-process **RTX 3060**, option scoring vs AR JSON
+(`benchmarks/latency_vs_ar.json`):
 
 | Case | Option p50 (ms) | AR JSON p50 (ms) | AR / option |
 |---|---:|---:|---:|
 | short_3q | 26.2 | 1057 | 40.3× |
 | short_13q | 64.9 | 3482 | 53.7× |
-| long_3q (~6k chars) | 107.6 | 1137 | 10.6× |
+| long_3q | 107.6 | 1137 | 10.6× |
 | long_13q | 157.9 | 3613 | 22.9× |
 
-Option path: batched next-token logits; softmax over option token ids; prefix KV.
-AR runs often used the full `max_new_tokens` budget (no early EOS). Option path
-is schema-constrained; AR JSON validity is not guaranteed in this bench.
-
-TypeSafe public materials cite Jev E2E roughly **70–500 ms** (cloud + network;
-not measured here).
-
-## Inference method (server)
-
-1. Encode shared `state` once (prefix KV).  
-2. Batch per-question suffixes.  
-3. Softmax only over criteria / yes–no / score-level token ids.  
-4. Assemble System One–shaped `answers`.
+## Inference
 
 ```bash
 systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
@@ -111,9 +94,10 @@ model = AutoModelForCausalLM.from_pretrained(model_id, trust_remote_code=True)
 
 ## Limits
 
-- Synthetic rule labels; not human preference data or RLCD.  
-- Option softmax ≠ population calibration (no ECE curves published).  
-- Multi-token option strings are not first-class (training uses letter aliases).
+- Synthetic / engine labels; not human prefs or RLCD.  
+- Option softmax ≠ population calibration (no ECE).  
+- Chess absolute accuracy on the debiased harness is still modest.  
+- Multi-token option strings are not first-class (letter aliases in training).
 """
 
 

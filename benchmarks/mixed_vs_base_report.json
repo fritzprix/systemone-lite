@@ -1,0 +1,93 @@
+{
+  "train": {
+    "checkpoint": "checkpoints/systemone-mixed-sft",
+    "data": "data/mixed_train.jsonl",
+    "from": "Qwen/Qwen2.5-0.5B-Instruct",
+    "gyms_equal": 10800,
+    "steps": 10800,
+    "chess_state": "board_2d_map"
+  },
+  "general_iid": {
+    "n": 3600,
+    "base": 0.4386111111111111,
+    "mixed_sft": 0.7813888888888889,
+    "delta": 0.3427777777777778,
+    "per_task": {
+      "alloc.can_fund_all": {
+        "base": 0.53,
+        "mixed_sft": 0.5975,
+        "delta": 0.0675
+      },
+      "alloc.fund_next": {
+        "base": 0.25,
+        "mixed_sft": 0.975,
+        "delta": 0.725
+      },
+      "alloc.pressure": {
+        "base": 0.3675,
+        "mixed_sft": 0.6775,
+        "delta": 0.31
+      },
+      "debate.confidence": {
+        "base": 0.255,
+        "mixed_sft": 0.4725,
+        "delta": 0.21749999999999997
+      },
+      "debate.enough_evidence": {
+        "base": 0.4875,
+        "mixed_sft": 0.55,
+        "delta": 0.06250000000000006
+      },
+      "debate.winner": {
+        "base": 0.5525,
+        "mixed_sft": 0.81,
+        "delta": 0.25750000000000006
+      },
+      "ticket.needs_human": {
+        "base": 0.6325,
+        "mixed_sft": 0.985,
+        "delta": 0.35250000000000004
+      },
+      "ticket.route": {
+        "base": 0.4825,
+        "mixed_sft": 1.0,
+        "delta": 0.5175000000000001
+      },
+      "ticket.urgency": {
+        "base": 0.39,
+        "mixed_sft": 0.965,
+        "delta": 0.575
+      }
+    }
+  },
+  "general_hard": {
+    "n": 5400,
+    "base": 0.4266666666666667,
+    "mixed_sft": 0.7333333333333333,
+    "delta": 0.3066666666666666
+  },
+  "chess_move_2d": {
+    "n": 500,
+    "data": "data/chess_eval_5k_2d.jsonl",
+    "base": 0.05,
+    "mixed_sft": 0.236,
+    "delta": 0.186,
+    "note": "Eval uses board_2d_map + shuffled option order. FEN-era base@0.79 was inflated by option-order bias; shuffled baseline is near chance (~1/n_options)."
+  },
+  "reference_prior": {
+    "general_only_sft_iid": 0.6791666666666667,
+    "general_only_sft_hard": 0.6518518518518519,
+    "fen_era": {
+      "base": 0.79,
+      "general_sft": 0.458,
+      "chess_sft": 0.834
+    }
+  },
+  "chess_comparisons": {
+    "base @ fen-era eval": 0.06,
+    "base @ 2d+shuffled": 0.05,
+    "mixed-sft @ 2d+shuffled": 0.236,
+    "old chess-sft @ 2d+shuffled": 0.028,
+    "old general-sft @ 2d+shuffled": 0.042
+  }
+}

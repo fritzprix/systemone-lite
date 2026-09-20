@@ -40,6 +40,7 @@ CLR_RED = "\033[91m"
 CLR_YELLOW = "\033[93m"
 CLR_CYAN = "\033[96m"
 CLR_WHITE = "\033[97m"
+CLR_GRAY = "\033[90m"
 
 
 def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
@@ -407,8 +408,7 @@ def main() -> None:
     if args.stub:
         client = SystemOneClient(engine=StubEngine())
     else:
-        from systemone_lite.infer import LocalInferEngine
-        client = SystemOneClient(engine=LocalInferEngine(model_id=args.model))
+        client = SystemOneClient(model=args.model)
 
     res = play_connect4_demo(
         client=client,

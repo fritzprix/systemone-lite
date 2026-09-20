@@ -416,8 +416,7 @@ def main() -> None:
     if args.stub:
         client = SystemOneClient(engine=StubEngine())
     else:
-        from systemone_lite.infer import LocalInferEngine
-        client = SystemOneClient(engine=LocalInferEngine(model_id=args.model))
+        client = SystemOneClient(model=args.model)
 
     res = play_gridworld_demo(
         client=client,

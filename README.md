@@ -10,7 +10,8 @@ replacement.
 scoring over **option token ids only** (softmax restricted to the question’s
 criteria / yes–no / score levels). No autoregressive JSON string generation.
 
-**Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoint:
+**Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoint
+(mixed gyms + chess, from base):
 [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
 
 ## Visual Demos
@@ -86,41 +87,44 @@ python scripts/bench_latency.py --warmup 3 --runs 15 \
   --out benchmarks/latency_vs_ar.json
 ```
 
-### General SFT accuracy (option top-1)
+### Mixed SFT accuracy (option top-1)
 
-Dataset: [`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)
-(ticket / alloc / debate gyms). Train: 32 400 rows, 1 epoch, batch size 3,
-gym-stratified batches (10 800 steps; equal gym exposure).
-Checkpoint: [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
+Cold start from `Qwen/Qwen2.5-0.5B-Instruct`. Train set:
+`data/mixed_train.jsonl` (43 200 rows) — ticket / alloc / debate / chess with
+**equal gym exposure** (10 800 each; chess upsampled from 4 500 move rows with
+`board_2d_map`). Recipe: 1 epoch, batch size 4, `--stratified`, 10 800 steps.
+Checkpoint: `checkpoints/systemone-mixed-sft` → published as
+[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
 
-| Split | n | Base 0.5B | SFT | Δ |
+Report: [`benchmarks/mixed_vs_base_report.json`](benchmarks/mixed_vs_base_report.json).
+
+#### General held-out
+
+| Split | n | Base 0.5B | Mixed SFT | Δ |
 |---|---:|---:|---:|---:|
-| iid (`test`) | 3600 | 0.439 | 0.679 | +0.240 |
-| hard (`test_hard`) | 5400 | 0.427 | 0.652 | +0.225 |
+| iid (`general_eval`) | 3600 | 0.439 | **0.781** | +0.343 |
+| hard (`general_eval_hard`) | 5400 | 0.427 | **0.733** | +0.307 |
 
-Hard split: alternate state layouts, option subsets, paraphrases (same label
-rules). Per-task JSON:
-[`benchmarks/general_base_eval.json`](benchmarks/general_base_eval.json),
-[`benchmarks/general_sft_eval.json`](benchmarks/general_sft_eval.json),
-[`benchmarks/general_sft_eval_hard.json`](benchmarks/general_sft_eval_hard.json).
+Selected iid (mixed): `ticket.route` 1.000, `ticket.urgency` 0.965,
+`ticket.needs_human` 0.985, `alloc.fund_next` 0.975, `debate.winner` 0.810.
+Weaker: `debate.enough_evidence` 0.550, `debate.confidence` 0.473.
 
-Selected iid tasks (SFT): `ticket.route` 1.000, `alloc.fund_next` 0.980,
-`ticket.needs_human` 0.775. Near-base: `debate.winner` 0.493,
-`debate.enough_evidence` 0.460.
+(Prior general-only SFT on the same splits: iid 0.679 / hard 0.652.)
 
-### Chess (no positive transfer from general SFT)
+#### Chess move (2D board + shuffled options)
 
-Move-choice top-1 on `data/chess_eval_5k.jsonl` (n=500).
-Source: [`benchmarks/chess_transfer_from_general.json`](benchmarks/chess_transfer_from_general.json).
+Eval: `data/chess_eval_5k_2d.jsonl` (n=500). Options are letter-aliased and
+**order-shuffled**; raw FEN-only / fixed-order evals overstated base accuracy.
 
 | Checkpoint | Accuracy |
 |---|---:|
-| Base `Qwen2.5-0.5B-Instruct` | 0.790 |
-| General SFT (`systemone-lite-0.5b`) | 0.458 |
-| Chess SFT (`checkpoints/chess-sft`, local) | 0.834 |
+| Base | 0.050 |
+| Mixed SFT | **0.236** |
+| Prior general-only SFT | 0.042 |
+| Prior chess-only SFT (FEN-era weights) | 0.028 |
 
-General and chess checkpoints are separate; mixing domains in one weight file
-is not claimed to transfer.
+Mixed training raises chess above chance without collapsing general tasks.
+Absolute chess accuracy remains modest on this debiased harness.
 
 ## Resources
 
@@ -128,7 +132,7 @@ is not claimed to transfer.
 |---|---|
 | Code | [github.com/fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) |
 | Dataset | [dwidlee/systemone-lite-general](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
-| General SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
+| Mixed SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
 | Base model | [Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) |
 | System One API (reference) | [docs.typesafe.ai/api.md](https://docs.typesafe.ai/api.md) |
 | Design notes | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
@@ -256,33 +260,46 @@ wc -l data/general_train.jsonl data/general_eval.jsonl data/general_eval_hard.js
 | `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` |
 | `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` |
 
-### Fine-tune
+### Fine-tune (mixed: general + chess)
 
 ```bash
+# Refresh chess JSONL with board_2d_map (keeps Stockfish labels)
+python scripts/chess_distill_dataset.py \
+  --refresh-file data/chess_train_5k.jsonl \
+  --out data/chess_train_5k_2d.jsonl
+
+python scripts/build_mixed_distill.py \
+  --general data/general_train.jsonl \
+  --chess data/chess_train_5k_2d.jsonl \
+  --out data/mixed_train.jsonl \
+  --chess-target 10800
+
 python scripts/chess_finetune.py \
-  --data data/general_train.jsonl \
-  --out checkpoints/systemone-sft \
-  --epochs 1 --batch-size 3 --tasks all --stratified
+  --data data/mixed_train.jsonl \
+  --out checkpoints/systemone-mixed-sft \
+  --model Qwen/Qwen2.5-0.5B-Instruct \
+  --epochs 1 --batch-size 4 --tasks all --stratified
 
 python scripts/general_eval.py \
   --data data/general_eval.jsonl \
-  --model checkpoints/systemone-sft \
-  --out benchmarks/general_sft_eval.json
+  --model checkpoints/systemone-mixed-sft \
+  --out benchmarks/mixed_sft_general_iid.json
 
-python scripts/general_eval.py \
-  --data data/general_eval_hard.jsonl \
-  --model checkpoints/systemone-sft \
-  --out benchmarks/general_sft_eval_hard.json
+python scripts/chess_eval.py \
+  --data data/chess_eval_5k_2d.jsonl \
+  --model checkpoints/systemone-mixed-sft --task move --limit 500
 
-python scripts/upload_model_hf.py
+python scripts/upload_model_hf.py --dir checkpoints/systemone-mixed-sft
 systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
 ```
 
-Accuracy numbers: see [Measured results](#measured-results).
+Numbers: [Measured results](#mixed-sft-accuracy-option-top-1).
 
 ## Chess fine-tuning (Stockfish distill)
 
-Separate checkpoint for legal move choice. Not the general HF model above.
+Chess rows use `board_2d_map` (labeled 8×8 ASCII), not FEN alone. Prefer the
+**mixed** checkpoint above for joint general+chess weights. A chess-only local
+run is still useful for ablation:
 
 ```bash
 # Ubuntu: sudo apt install stockfish
@@ -297,7 +314,7 @@ python scripts/chess_finetune.py \
   --out checkpoints/chess-sft \
   --epochs 2 --batch-size 2 --max-steps 200
 
-python scripts/chess_eval.py --data data/chess_eval_5k.jsonl \
+python scripts/chess_eval.py --data data/chess_eval_5k_2d.jsonl \
   --model checkpoints/chess-sft --task move --limit 500
 ```
 
@@ -306,7 +323,8 @@ systemone-lite --model checkpoints/chess-sft --port 8000
 ```
 
 Labels: Stockfish when available (`/usr/games/stockfish` on Ubuntu), else a
-tactical heuristic. Transfer numbers: [Measured results](#chess-no-positive-transfer-from-general-sft).
+tactical heuristic. Mixed vs base numbers:
+[Measured results](#chess-move-2d-board--shuffled-options).
 
 ## Viral chess demo (local video)
 

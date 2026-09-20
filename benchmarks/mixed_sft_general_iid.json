@@ -1,0 +1,43 @@
+{
+  "model": "checkpoints/systemone-mixed-sft",
+  "n": 3600,
+  "accuracy": 0.7813888888888889,
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 400,
+      "accuracy": 0.5975
+    },
+    "alloc.fund_next": {
+      "n": 400,
+      "accuracy": 0.975
+    },
+    "alloc.pressure": {
+      "n": 400,
+      "accuracy": 0.6775
+    },
+    "debate.confidence": {
+      "n": 400,
+      "accuracy": 0.4725
+    },
+    "debate.enough_evidence": {
+      "n": 400,
+      "accuracy": 0.55
+    },
+    "debate.winner": {
+      "n": 400,
+      "accuracy": 0.81
+    },
+    "ticket.needs_human": {
+      "n": 400,
+      "accuracy": 0.985
+    },
+    "ticket.route": {
+      "n": 400,
+      "accuracy": 1.0
+    },
+    "ticket.urgency": {
+      "n": 400,
+      "accuracy": 0.965
+    }
+  }
+}
