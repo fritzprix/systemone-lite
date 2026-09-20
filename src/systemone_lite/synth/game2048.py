@@ -193,7 +193,7 @@ def generate_2048_samples(
 
             # 1. Choice sample: best slide direction
             options = {
-                d: f"RECOMMENDED: Slide {d} to merge tiles" if d == best_d else f"Slide {d}"
+                d: f"Slide tiles {d}"
                 for d in legal.keys()
             }
             for d in ["UP", "DOWN", "LEFT", "RIGHT"]:

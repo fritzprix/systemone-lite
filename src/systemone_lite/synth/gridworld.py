@@ -162,17 +162,7 @@ def generate_gridworld_samples(
             gr, gc = curr_map.goal
             dist_left = abs(pr - gr) + abs(pc - gc)
 
-            options = {}
-            for d, (dr, dc) in DIRECTIONS.items():
-                nr, nc = pr + dr, pc + dc
-                if not (0 <= nr < curr_map.height and 0 <= nc < curr_map.width) or curr_map.grid[nr][nc] == "#":
-                    options[d] = f"BLOCKED: Wall {d}"
-                elif (nr, nc) in curr_map.hazards:
-                    options[d] = f"DEADLY: Lava/Spike trap {d}"
-                elif d == best_action:
-                    options[d] = f"RECOMMENDED: Move {d} directly towards goal"
-                else:
-                    options[d] = f"SAFE: Move {d}"
+            options = {d: f"Move {d}" for d in DIRECTIONS}
 
             state = {
                 "grid_map": grid_ascii,

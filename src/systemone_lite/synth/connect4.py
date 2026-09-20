@@ -165,11 +165,7 @@ def generate_connect4_samples(
             for c in range(COLS):
                 col_name = str(c + 1)
                 if c not in legal:
-                    options[col_name] = f"FULL: Column {col_name} is full"
-                elif c == best_col:
-                    options[col_name] = f"RECOMMENDED: Drop disc into Column {col_name}"
-                elif c == threat_col:
-                    options[col_name] = f"BLOCK THREAT: Column {col_name}"
+                    options[col_name] = f"Column {col_name} is full"
                 else:
                     options[col_name] = f"Drop disc into Column {col_name}"
 
