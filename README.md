@@ -364,6 +364,49 @@ python scripts/snake_demo.py --episodes 10 --quiet
 
 Outputs: `benchmarks/viral/snake_demo.gif`, `benchmarks/viral/snake_demo.mp4`
 
+## Spatial 2D Game Demos & Synthetic Dataset Engine
+
+In addition to Chess and Snake, System One Lite includes full-fledged 2D spatial text-map environments with real-time heuristic/BFS solvers and instant `--stub` execution:
+
+### 1. Sokoban (`sokoban_demo.py`)
+Warehouse box-pushing puzzle with real-time deadlock detection:
+```bash
+python scripts/sokoban_demo.py --stub
+```
+
+### 2. 2048 (`game2048_demo.py` / `2048_demo.py`)
+4x4 sliding tile puzzle with sub-10ms corner & monotonicity reflexes:
+```bash
+python scripts/game2048_demo.py --stub
+```
+
+### 3. GridWorld Hazards (`gridworld_demo.py`)
+Procedural maze navigation with deadly lava/spike trap avoidance:
+```bash
+python scripts/gridworld_demo.py --stub
+```
+
+### 4. Connect Four (`connect4_demo.py`)
+7-column vertical gravity board with instant 4-in-a-row threat defense:
+```bash
+python scripts/connect4_demo.py --stub
+```
+
+### 5. Multi-Step Chess (`chess_multistep_demo.py`)
+Two-stage System 1 decision pipeline: Stage 1 (Piece Selection) → Stage 2 (Destination Selection):
+```bash
+python scripts/chess_multistep_demo.py --stub --max-plies 10
+```
+
+### Synthetic Dataset Synthesis (`build_spatial_distill.py`)
+Generate supervised spatial datasets across all 4 games:
+```bash
+python scripts/build_spatial_distill.py \
+  --games sokoban,game2048,gridworld,connect4 \
+  --samples-per-game 500 \
+  --out data/spatial_distill.jsonl
+```
+
 ## Project layout
 
 ```text
