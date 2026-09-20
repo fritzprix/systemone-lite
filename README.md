@@ -329,6 +329,8 @@ tactical heuristic. Mixed vs base numbers:
 
 ## Interactive Demos & Dry-Runs
 
+> **Baseline vs. SFT Comparison**: See [benchmarks/demos/README.md](benchmarks/demos/README.md) for 100% genuine, unassisted side-by-side gameplay comparisons between `Qwen2.5-0.5B-Instruct` (Base) and `systemone-mixed-sft` (Phase 1 SFT).
+
 System One Lite provides terminal-based interactive environments with live telemetry, ANSI rendering, and `--stub` dry-run modes (which run instantly on CPU without downloading weights):
 
 ### 1. Multi-Step Chess Player (`chess_multistep_demo.py`)
