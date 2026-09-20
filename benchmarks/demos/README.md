@@ -1,38 +1,43 @@
-# ⚖️ Honest Baseline vs. SFT Model Comparison
+# Bare-face Base vs SFT demos
 
-This directory contains **100% genuine, unassisted side-by-side gameplay recordings** comparing the raw pre-trained Base model against our Phase 1 Mixed SFT checkpoint under identical, neutral conditions.
+Side-by-side recordings under **stripped prompts** (no tactical keyword hints, no solver overrides).
 
----
+Regenerate:
 
-## 🔬 Experimental Setup & Ground Rules
+```bash
+python scripts/run_bare_demos.py
+# → benchmarks/demos/{base_model,sft_model}/*.gif
+# → benchmarks/demos/bare_face_report.json
+```
 
-1. **No Keyword Hints**: Zero prompt-injection shortcuts (`RECOMMENDED:`, `OPTIMAL:`, `BLOCK THREAT:` have been completely eliminated).
-2. **Neutral Option Sorting**: Candidate moves and directions are sorted neutrally (e.g., standard UCI string order `a2a3, a2a4, ...` or standard cardinal directions `UP, DOWN, LEFT, RIGHT`), preventing heuristic position bias.
-3. **Hardware**: Local NVIDIA RTX 3060 (12GB VRAM), PyTorch 2.x, FP16 inference.
+## Protocol
 
----
+| Rule | Detail |
+|---|---|
+| Option text | Bare labels only (`pawn a2->a3`, `Slide UP`, `Move LEFT`). No `CAPTURES` / `CHECK` / `develop` / `RECOMMENDED` / `BLOCKED` / `DEADLY`. |
+| Chess option set | **All** legal moves (cap 26 via FEN-seeded subsample). Aliases sorted by UCI. Previous demos used UCI-sort then `[:8]` (a-file bias). |
+| Solver override | Disabled. Illegal model output → first legal action only (not BFS / `best_move_*`). |
+| Colors | Self-play: both sides are the **same** model. |
+| Hardware | Local NVIDIA RTX 3060, FP16 when available. |
+| Models | Base = `Qwen/Qwen2.5-0.5B-Instruct`. SFT = `checkpoints/systemone-mixed-sft`. |
 
-## 📊 Models Evaluated
+Machine-readable numbers: [`bare_face_report.json`](bare_face_report.json).
 
-* **Base Model (`base_model/`)**: `Qwen/Qwen2.5-0.5B-Instruct` (raw pre-trained instruct weights without domain SFT).
-* **SFT Model (`sft_model/`)**: `checkpoints/systemone-mixed-sft` (fine-tuned on 43,200 balanced samples of General System 1 triage + 2D Chess FENs).
+## Results (this run)
 
----
-
-## 🎬 Side-by-Side Comparison
-
-| Environment | Base Model (`base_model/`) | SFT Model (`sft_model/`) | Analysis & Observations |
+| Env | Base | SFT | Honest read |
 |---|---|---|---|
-| **♟️ Proper Tactical Chess** | `base_model/chess_proper.gif`<br/>Moves: `a3 a6 Ra2 c6 Ra1 d6 Ra2 a5 Ra1 a4`<br/>Latency: ~371ms | `sft_model/chess_proper.gif`<br/>Moves: `Nc3 Na6 Na4 Rb8 Nb6 Ra8 Nxa8 c6 Nb6 axb6`<br/>Latency: ~191ms | **Clear SFT Superiority**:<br/>• **Base**: Pushes flank pawn and aimlessly shuffles Rook (`Ra2-Ra1`).<br/>• **SFT**: Develops Knight (`Nc3`), infiltrates Queenside (`Na4 → Nb6`), and **captures Black's Rook** on a8 (`Nxa8`). |
-| **♟️ Multi-Step Chess** | `base_model/chess_multistep.gif`<br/>Moves: `a3 a5 Ra2 a4 Ra1 Ra5 Ra2 Ra6 Ra1 Ra5`<br/>Latency: ~364ms | `sft_model/chess_multistep.gif`<br/>Moves: `Nc3 Nc6 Rb1 Rb8 Ra1 Ra8 Rb1 Rb8 Ra1 Ra8`<br/>Latency: ~203ms | **Opening Recognition**:<br/>• **Base**: Repeats flank moves (`a3, Ra2, Ra1`).<br/>• **SFT**: Actively selects Knights for early development (`Nc3, Nc6`). |
-| **🔢 2048 Game** | `base_model/game2048.gif`<br/>Final: Score 64, Tile 16 | `sft_model/game2048.gif`<br/>Final: Score 60, Tile 16 | **Zero-Shot Baseline**:<br/>Neither model was trained on 2048 in Phase 1. Both execute legal merges reaching Tile 16. |
-| **🗺️ GridWorld Hazard** | `base_model/gridworld.gif`<br/>10 steps (Goal reached 🏆) | `sft_model/gridworld.gif`<br/>10 steps (Goal reached 🏆) | **Neutral Navigation**:<br/>Both navigate the 2D grid corridor towards the exit without falling into lava. |
-| **📦 Sokoban Warehouse** | `base_model/sokoban.gif`<br/>10 steps | `sft_model/sokoban.gif`<br/>10 steps | **Zero-Shot Baseline**:<br/>Neither model has seen box-pushing trajectories yet. Demonstrates the need for Phase 2 training. |
-| **🔴 Connect Four** | `base_model/connect4.gif`<br/>12 turns (Draw) | `sft_model/connect4.gif`<br/>12 turns (Draw) | **Zero-Shot Baseline**:<br/>Both drop discs into open vertical columns. |
+| Chess proper (`chess_proper.gif`) | `a3 a6 Ra2 Ra7 Ra1 Ra8 Ra2 Ra7 Ra1 Ra8` (~380ms) | `Nc3 Na6 Rb1 Rb8 Ra1 Ra8 Rb1 Rb8 Ra1 Ra8` (~157ms) | SFT opens with a knight; then both sides mostly rook-shuffle. **No tactical capture** once `CAPTURES …` tags are gone. |
+| Chess multistep | `a3 a5 Ra2 a4 Ra1 Ra5 …` (~70ms) | `Nc3 Nc6 Rb1 Rb8 Ra1 Ra8 …` (~63ms) | Same pattern: early knight recognition on SFT, then rook loops. |
+| 2048 | score 32, max tile 8 | score 36, max tile 8 | Near-shot / weak. Phase 1 did not train 2048. |
+| GridWorld | 10 steps, **not** solved | 10 steps, **not** solved | Earlier “both reach goal 🏆” was inflated by a **BFS path override** in the demo loop (now removed). |
+| Sokoban | 10 steps, not solved | 10 steps, not solved | Zero-shot; no box-pushing trajectories in Phase 1. |
+| Connect4 | 12 turns, no winner | 12 turns, no winner | Legal drops only; no win/block policy learned. |
 
----
+## Takeaways
 
-## 💡 Key Takeaways
+1. **Chess**: With bare labels + full legal move lists, SFT still prefers opening knights (`Nc3`/`Nc6`) vs Base’s flank pawn / rook shuffle — a real but **narrow** signal. The prior “`Nxa8` rook capture” demo does **not** reproduce without capture keywords.
+2. **Other 2D games**: Both models look like zero-shot reflexes. Do not read GIFs as competence proofs.
+3. **Held-out numbers** (not GIFs) remain the serious metric: chess move accuracy ~0.05 → ~0.24 on shuffled `board_2d_map` eval (`benchmarks/mixed_vs_base_report.json`).
 
-1. **Where SFT genuinely works**: In domains where domain data was actually injected (Chess 2D representation), the SFT model displays distinct strategic competence (developing minor pieces, tactical piece capture) over the base model's aimless flank pawn pushes.
-2. **Where SFT requires Phase 2**: In games where training data has not yet been introduced (Sokoban, 2048, Connect4), both models behave zero-shot. This proves why **Phase 2 (Synthetic Spatial Trajectories & $D_4$ Dihedral Symmetry Augmentation)** is essential to teach true spatial reasoning without prompt heuristics.
+GIF frames are animated step-by-step (verify with `Image.seek`, not naive `ImageSequence` iteration without `.copy()`).

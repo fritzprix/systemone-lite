@@ -1,24 +1,16 @@
 #!/usr/bin/env python3
 """Multi-step Autonomous Chess Demo powered by systemone-lite.
 
-Demonstrates a realistic 2-stage 'System 1' decision pipeline per turn:
-  Stage 1 (Piece Selection):
-    - System 1 inspects the 2D board map and selects WHICH piece should move.
-    - Prioritizes active center control, minor piece development, and king safety.
-  Stage 2 (Destination Selection):
-    - With the piece selected and highlighted on the board, System 1 selects
-      WHERE that specific piece should move among all its legal destinations.
-    - Simultaneously evaluates strategic position score and threat alert.
-
-Features:
-  - Rich ANSI terminal animation with piece glyphs & two-stage telemetry HUD
-  - High-definition GIF / MP4 export with visual highlighting of selected piece
-  - Instant dry-run mode via --stub
+Bare-face 2-stage pipeline (no tactical keyword hints):
+  Stage 1: select which piece to move (all origins, capped at 26).
+  Stage 2: select destination with bare UCI labels (no capture/check/develop tags).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import random
 import sys
 import time
 from dataclasses import dataclass
@@ -32,14 +24,31 @@ from systemone_lite import SystemOneClient, choice, noul, score
 from systemone_lite.chess_data import (
     PIECE_VALUE,
     alias_criteria,
-    board_state,
-    describe_move,
     describe_piece,
     legal_by_origin,
     render_board_ascii,
 )
 from systemone_lite.infer import DEFAULT_MODEL_ID
 from systemone_lite.stub import StubEngine
+
+MAX_OPTIONS = 26
+
+
+def _fen_seed(fen: str) -> int:
+    return int(hashlib.sha256(fen.encode()).hexdigest()[:8], 16)
+
+
+def _cap_sorted(items: list[Any], fen: str, key_fn) -> list[Any]:
+    """FEN-seeded subsample to MAX_OPTIONS, then stable key sort."""
+    if len(items) > MAX_OPTIONS:
+        rng = random.Random(_fen_seed(fen))
+        items = rng.sample(items, MAX_OPTIONS)
+    return sorted(items, key=key_fn)
+
+
+def _bare_move_label(board: chess.Board, move: chess.Move) -> str:
+    to_sq = chess.square_name(move.to_square)
+    return f"{move.uci()}: to {to_sq}"
 
 # ANSI Colors
 CLR_RESET = "\033[0m"
@@ -73,59 +82,6 @@ def _get_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFo
         if Path(path).exists():
             return ImageFont.truetype(path, size=size)
     return ImageFont.load_default()
-
-
-def _score_origin(board: chess.Board, sq_name: str) -> float:
-    """Heuristic score to rank origin candidate options."""
-    sq = chess.parse_square(sq_name)
-    piece = board.piece_at(sq)
-    if piece is None:
-        return 0.0
-    s = 0.0
-    file = chess.square_file(sq)
-    rank = chess.square_rank(sq)
-    is_opening = board.fullmove_number <= 7
-
-    # Center pawns
-    if piece.piece_type == chess.PAWN and file in (3, 4):
-        s += 35.0 if is_opening else 15.0
-    # Minor piece development from back rank
-    if piece.piece_type in (chess.KNIGHT, chess.BISHOP):
-        back = 0 if piece.color == chess.WHITE else 7
-        if rank == back:
-            s += 30.0 if is_opening else 10.0
-        else:
-            s += 15.0
-    # Checks or captures available from this piece
-    for move in board.legal_moves:
-        if move.from_square == sq:
-            if board.is_capture(move):
-                s += 25.0
-            if board.gives_check(move):
-                s += 40.0
-    return s
-
-
-def _score_target(board: chess.Board, move: chess.Move) -> float:
-    """Heuristic score to rank destination candidate options."""
-    s = 0.0
-    if board.gives_check(move):
-        s += 50.0
-    if board.is_capture(move):
-        victim = board.piece_at(move.to_square)
-        v = PIECE_VALUE.get(victim.piece_type, 1) if victim else 1
-        s += 30.0 + v * 5.0
-    to_sq = chess.square_name(move.to_square)
-    if to_sq in ("e4", "d4", "e5", "d5"):
-        s += 25.0
-    mover = board.piece_at(move.from_square)
-    if mover and mover.piece_type in (chess.KNIGHT, chess.BISHOP):
-        from_rank = chess.square_rank(move.from_square)
-        if (mover.color == chess.WHITE and from_rank == 0) or (mover.color == chess.BLACK and from_rank == 7):
-            s += 20.0
-    if board.is_castling(move):
-        s += 40.0
-    return s
 
 
 @dataclass
@@ -178,10 +134,7 @@ class MultiStepChessGame:
         if not grouped:
             raise RuntimeError("No legal moves available")
 
-        # Order candidate origin squares neutrally by square name without heuristic bias
-        sorted_origins = sorted(grouped.keys())
-        top_origins = sorted_origins[:8]
-
+        top_origins = _cap_sorted(list(grouped.keys()), self.board.fen(), key_fn=lambda s: s)
         origin_options = {sq: describe_piece(self.board, sq) for sq in top_origins}
         criteria, alias_to_key = alias_criteria(origin_options)
 
@@ -194,13 +147,13 @@ class MultiStepChessGame:
             "side_to_move": f"{turn_name} (Turn {self.board.fullmove_number})",
             "is_in_check": self.board.is_check(),
             "material_balance": f"White {white_mat} vs Black {black_mat}",
-            "decision_stage": "Stage 1 of 2: Selecting which active piece to move",
+            "decision_stage": "Stage 1 of 2: select a piece that has a legal move",
         }
 
         questions = {
             "piece": choice(
                 f"It is {turn_name}'s turn. Based on the 2D chess board map, choose WHICH piece to move. "
-                "Prefer development, center control, and king safety. Reply with option letter.",
+                "Reply with the option letter.",
                 criteria,
             )
         }
@@ -211,14 +164,10 @@ class MultiStepChessGame:
         grouped = legal_by_origin(self.board)
         dest_moves = grouped.get(origin, [])
         if not dest_moves:
-            # Fallback if square has no legal moves
             dest_moves = list(self.board.legal_moves)
 
-        # Order destinations neutrally by UCI string without heuristic bias
-        sorted_moves = sorted(dest_moves, key=lambda m: m.uci())
-        top_moves = sorted_moves[:8]
-
-        move_options = {m.uci(): describe_move(self.board, m) for m in top_moves}
+        top_moves = _cap_sorted(list(dest_moves), self.board.fen(), key_fn=lambda m: m.uci())
+        move_options = {m.uci(): _bare_move_label(self.board, m) for m in top_moves}
         criteria, alias_to_key = alias_criteria(move_options)
         alias_to_move = {alias: chess.Move.from_uci(uci) for alias, uci in alias_to_key.items()}
 
@@ -232,25 +181,25 @@ class MultiStepChessGame:
             "side_to_move": f"{turn_name} (Turn {self.board.fullmove_number})",
             "selected_piece": origin,
             "selected_piece_description": origin_desc,
-            "decision_stage": f"Stage 2 of 2: Piece on {origin} ({origin_desc}) is selected. Choosing destination.",
+            "decision_stage": f"Stage 2 of 2: piece on {origin} selected; choose destination",
         }
 
         questions = {
             "destination": choice(
                 f"The piece on {origin} ({origin_desc}) is selected. "
-                "Choose the best legal destination square. Reply with option letter.",
+                "Choose one legal destination. Reply with the option letter.",
                 criteria,
             ),
             "position_eval": score(
                 f"Evaluate current position from {turn_name}'s perspective.",
                 [
-                    "Equal: balanced position and material",
-                    "Slight advantage: better center or piece activity",
-                    "Clear advantage / Winning: major tactical win or up material",
+                    "Equal",
+                    "Slight advantage",
+                    "Clear advantage",
                 ],
             ),
             "threat_alert": noul(
-                f"Is {turn_name}'s King or a high-value piece currently in immediate danger?"
+                f"Is {turn_name} currently in check or about to lose material on the next reply?"
             ),
         }
         return state, questions, alias_to_move
@@ -598,7 +547,7 @@ def play_multistep_game(
             # Intermediate Stage 1 animation frame (showing piece selected)
             elapsed_s = time.perf_counter() - start_time
             if gif_path or mp4_path:
-                frames.append(game.render_frame_pil(last_step1, None, t1_ms, None, elapsed_s))
+                frames.append(game.render_frame_pil(last_step1, None, t1_ms, None, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -645,7 +594,7 @@ def play_multistep_game(
 
             # Final Stage 2 animation frame (showing destination chosen & move played)
             if gif_path or mp4_path:
-                frames.append(game.render_frame_pil(last_step1, last_step2, total_turn_ms, avg_lat, elapsed_s))
+                frames.append(game.render_frame_pil(last_step1, last_step2, total_turn_ms, avg_lat, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -660,7 +609,11 @@ def play_multistep_game(
         total_elapsed_s = time.perf_counter() - start_time
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
         if gif_path or mp4_path:
-            frames.append(game.render_frame_pil(last_step1, last_step2, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s))
+            frames.append(
+                game.render_frame_pil(
+                    last_step1, last_step2, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s
+                ).copy()
+            )
 
         if animate:
             sys.stdout.write("\033[H")

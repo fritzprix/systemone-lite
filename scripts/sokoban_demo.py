@@ -68,14 +68,9 @@ class SokobanGame:
         self.won = False
 
     def build_systemone_payload(self) -> tuple[dict[str, Any], dict[str, Any]]:
-        grid_map = f"\n{self.level.render_ascii()}\n"
         legal_actions = self.level.get_legal_actions()
 
-        action_options = {}
-        for d in ["UP", "DOWN", "LEFT", "RIGHT"]:
-            if d in legal_actions:
-                _, _, pushed = legal_actions[d]
-                action_options[d] = f"Push box {d}" if pushed else f"Walk {d}"
+        action_options = {d: f"Move {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"] if d in legal_actions}
         if not action_options:
             action_options["WAIT"] = "No legal moves"
 
@@ -84,23 +79,23 @@ class SokobanGame:
 
 Legend: '#' Wall, '@' Worker, '$' Box, '.' Goal, '*' Box on Goal
 Worker Position: Row {self.level.player[0]}, Col {self.level.player[1]}
-Boxes Placed: {len(self.level.boxes & self.level.targets)} of {len(self.level.targets)}
+Boxes on goals: {len(self.level.boxes & self.level.targets)} of {len(self.level.targets)}
 """
 
         questions = {
             "direction": choice(
-                "Based on the 2D Sokoban map, choose the best legal move direction for Worker (@) to push boxes into goals.",
+                "Based on the 2D Sokoban map, choose one legal move direction for Worker (@).",
                 action_options,
             ),
             "deadlock_alert": noul(
-                "Is any box currently trapped or about to enter an irreversible corner deadlock?"
+                "Is any box currently in a corner with no path to a goal?"
             ),
             "progress_score": score(
                 "Evaluate puzzle completion progress.",
                 [
-                    "Just started: no boxes in goal",
-                    "Halfway: some boxes in goal",
-                    "Near complete: all boxes near or on goal",
+                    "Just started",
+                    "Some progress",
+                    "Near complete",
                 ],
             ),
         }
@@ -357,8 +352,9 @@ def play_sokoban_demo(
 
             ans_dir = resp.answers["direction"]
             chosen_dir = ans_dir.choice
-            if chosen_dir not in ["UP", "DOWN", "LEFT", "RIGHT"]:
-                chosen_dir = game.solution_path[min(game.sol_idx, len(game.solution_path) - 1)]
+            legal_actions = game.level.get_legal_actions()
+            if chosen_dir not in legal_actions:
+                chosen_dir = next(iter(legal_actions), "UP")
 
             last_decision = {
                 "chosen_direction": chosen_dir,
@@ -368,7 +364,7 @@ def play_sokoban_demo(
             }
 
             if gif_path:
-                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s))
+                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -383,7 +379,7 @@ def play_sokoban_demo(
         total_elapsed_s = time.perf_counter() - start_time
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
         if gif_path:
-            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s))
+            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s).copy())
         if animate:
             sys.stdout.write("\033[H")
             sys.stdout.write(game.render_ansi(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s) + "\n")

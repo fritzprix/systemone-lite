@@ -31,6 +31,15 @@ def test_analyze_legal_moves_opening():
     assert "d4" in all_san
     assert "Nf3" in all_san
 
+    # Bare labels: no tactical keyword hints
+    blob = " ".join(c.description for c in candidates).lower()
+    for banned in ("capture", "check", "develop", "recommended", "optimal"):
+        assert banned not in blob
+
+    state, questions, _alias = game.build_systemone_payload()
+    assert "strategic_phase" not in state
+    assert len(questions["move"]["criteria"]) == 20
+
 
 def test_chess_demo_stub_play():
     client = SystemOneClient(engine=StubEngine())

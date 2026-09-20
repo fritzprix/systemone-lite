@@ -27,7 +27,6 @@ from systemone_lite.synth.connect4 import (
     COLS,
     ROWS,
     Connect4Board,
-    best_move_connect4,
 )
 
 # ANSI Colors
@@ -63,37 +62,30 @@ class Connect4GameSession:
 
     def build_systemone_payload(self) -> tuple[dict[str, Any], dict[str, Any]]:
         curr_player = "R" if self.turns % 2 == 0 else "Y"
-        opp_player = "Y" if curr_player == "R" else "R"
         legal = self.board.get_legal_columns()
-        best_col = best_move_connect4(self.board, curr_player)
-        threat_col = self.board.find_immediate_threat(opp_player)
 
-        options = {}
-        for c in range(COLS):
-            col_key = str(c + 1)
-            if c not in legal:
-                options[col_key] = f"Column {col_key} is full"
-            else:
-                options[col_key] = f"Drop disc into column {col_key}"
+        # Only legal columns — no solver / threat tags in option text.
+        options = {str(c + 1): f"Drop into column {c + 1}" for c in legal}
+        if not options:
+            options = {"0": "No legal columns"}
 
         grid_ascii = f"\n{self.board.render_ascii()}\n"
-        player_name = "Red (🔴)" if curr_player == "R" else "Yellow (🟡)"
+        player_name = "Red" if curr_player == "R" else "Yellow"
 
         state = {
             "grid_map": grid_ascii,
             "side_to_move": player_name,
             "turn_number": self.turns + 1,
-            "threat_detected": threat_col is not None,
         }
 
         questions = {
             "drop": choice(
-                f"It is {player_name}'s turn. Choose the best column (1 to 7) to drop your disc. "
-                "Reply with: 1, 2, 3, 4, 5, 6, 7",
+                f"It is {player_name}'s turn. Choose one legal column to drop a disc. "
+                "Reply with the column number.",
                 options,
             ),
             "threat_alert": noul(
-                "Does the opponent have an immediate 4-in-a-row winning threat next turn?"
+                "Does the opponent have an immediate 4-in-a-row threat?"
             ),
         }
         return state, questions
@@ -330,11 +322,13 @@ def play_connect4_demo(
             elapsed_s = time.perf_counter() - start_time
 
             ans_col = resp.answers["drop"]
+            legal = game.board.get_legal_columns()
             try:
                 chosen_col = int(ans_col.choice)
             except (ValueError, TypeError):
-                curr_player = "R" if game.turns % 2 == 0 else "Y"
-                chosen_col = best_move_connect4(game.board, curr_player) + 1
+                chosen_col = (legal[0] + 1) if legal else 1
+            if (chosen_col - 1) not in legal and legal:
+                chosen_col = legal[0] + 1
 
             last_decision = {
                 "chosen_col": chosen_col,
@@ -344,7 +338,7 @@ def play_connect4_demo(
             }
 
             if gif_path:
-                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s))
+                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -359,7 +353,7 @@ def play_connect4_demo(
         total_elapsed_s = time.perf_counter() - start_time
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
         if gif_path:
-            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s))
+            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s).copy())
         if animate:
             sys.stdout.write("\033[H")
             sys.stdout.write(game.render_ansi(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s) + "\n")

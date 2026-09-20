@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFont
 from systemone_lite import SystemOneClient, choice, noul
 from systemone_lite.infer import DEFAULT_MODEL_ID
 from systemone_lite.stub import StubEngine
-from systemone_lite.synth.game2048 import Board2048, best_move_2048
+from systemone_lite.synth.game2048 import Board2048
 
 # ANSI Colors
 CLR_RESET = "\033[0m"
@@ -77,12 +77,10 @@ class Game2048Session:
     def build_systemone_payload(self) -> tuple[dict[str, Any], dict[str, Any]]:
         grid_ascii = f"\n{self.board.render_ascii()}\n"
         legal = self.board.get_legal_moves()
-        options = {}
-        for d in ["UP", "DOWN", "LEFT", "RIGHT"]:
-            if d in legal:
-                options[d] = f"Slide tiles {d}"
-            else:
-                options[d] = f"BLOCKED: No tiles move {d}"
+        # Only legal directions — no BLOCKED / CRITICAL / SAFE keyword hints.
+        options = {d: f"Slide {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"] if d in legal}
+        if not options:
+            options = {"WAIT": "No legal slides"}
 
         empty_count = len(self.board.empty_cells)
         state = {
@@ -90,17 +88,16 @@ class Game2048Session:
             "score": self.score,
             "max_tile": self.board.max_tile,
             "empty_cells": empty_count,
-            "status": "CRITICAL: Board almost full" if empty_count <= 2 else "SAFE: Good space",
         }
 
         questions = {
             "slide": choice(
-                "Based on the 4x4 2048 grid, select the best slide direction to merge tiles and keep high values in corners. "
-                "Reply with: UP, DOWN, LEFT, RIGHT",
+                "Based on the 4x4 2048 grid, choose one legal slide direction. "
+                "Reply with: UP, DOWN, LEFT, or RIGHT.",
                 options,
             ),
             "overflow_alert": noul(
-                "Is the 2048 grid currently in immediate danger of overflowing and ending the game?"
+                "Is the board full with no legal merges remaining?"
             ),
         }
         return state, questions
@@ -338,8 +335,7 @@ def play_2048_demo(
             chosen_dir = ans_dir.choice
             legal = game.board.get_legal_moves()
             if chosen_dir not in legal:
-                best_d, _ = best_move_2048(game.board)
-                chosen_dir = best_d if best_d in legal else list(legal.keys())[0]
+                chosen_dir = next(iter(legal), "UP")
 
             last_decision = {
                 "chosen_direction": chosen_dir,
@@ -349,7 +345,7 @@ def play_2048_demo(
             }
 
             if gif_path:
-                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s))
+                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -364,7 +360,7 @@ def play_2048_demo(
         total_elapsed_s = time.perf_counter() - start_time
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
         if gif_path:
-            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s))
+            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s).copy())
         if animate:
             sys.stdout.write("\033[H")
             sys.stdout.write(game.render_ansi(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s) + "\n")

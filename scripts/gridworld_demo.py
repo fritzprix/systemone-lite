@@ -61,9 +61,6 @@ class GridWorldSession:
 
     def build_systemone_payload(self) -> tuple[dict[str, Any], dict[str, Any]]:
         grid_ascii = f"\n{self.map.render_ascii()}\n"
-        path = self.map.find_shortest_safe_path()
-        best_dir = path[0] if path else "UP"
-
         pr, pc = self.map.player
         gr, gc = self.map.goal
         dist = abs(pr - gr) + abs(pc - gc)
@@ -71,19 +68,18 @@ class GridWorldSession:
 
         state = {
             "grid_map": grid_ascii,
-            "legend": "'#': Wall, '@': Player, 'G': Goal, 'X': Deadly Trap, '.': Floor",
+            "legend": "'#': Wall, '@': Player, 'G': Goal, 'X': Hazard, '.': Floor",
             "distance_to_goal": dist,
-            "hazard_nearby": self.map.is_adjacent_to_hazard(),
         }
 
         questions = {
             "move": choice(
-                "Based on the 2D map, choose the safest and fastest move direction (UP, DOWN, LEFT, RIGHT) "
-                "for Player (@) to reach Goal (G) without stepping on traps (X).",
+                "Based on the 2D map, choose one move direction (UP, DOWN, LEFT, RIGHT) "
+                "for Player (@).",
                 options,
             ),
             "hazard_alert": noul(
-                "Is the player (@) currently adjacent to a deadly trap (X)?"
+                "Is the player (@) currently adjacent to a hazard (X)?"
             ),
         }
         return state, questions
@@ -332,9 +328,8 @@ def play_gridworld_demo(
 
             ans_dir = resp.answers["move"]
             chosen_dir = ans_dir.choice
-            path = game.map.find_shortest_safe_path()
-            if chosen_dir not in ["UP", "DOWN", "LEFT", "RIGHT"] or (path and chosen_dir != path[0]):
-                chosen_dir = path[0] if path else "UP"
+            if chosen_dir not in ["UP", "DOWN", "LEFT", "RIGHT"]:
+                chosen_dir = "UP"
 
             last_decision = {
                 "chosen_direction": chosen_dir,
@@ -344,7 +339,7 @@ def play_gridworld_demo(
             }
 
             if gif_path:
-                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s))
+                frames.append(game.render_frame_pil(last_decision, lat_ms, avg_lat, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -359,7 +354,7 @@ def play_gridworld_demo(
         total_elapsed_s = time.perf_counter() - start_time
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
         if gif_path:
-            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s))
+            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s).copy())
         if animate:
             sys.stdout.write("\033[H")
             sys.stdout.write(game.render_ansi(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s) + "\n")

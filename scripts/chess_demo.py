@@ -1,21 +1,18 @@
 #!/usr/bin/env python3
 """Proper autonomous Chess demo powered by systemone-lite.
 
-System One acts as the real-time 'System 1' tactical chess brain:
-  - 8x8 2D text grid representation of the board (no FEN-only compression)
-  - Rich tactical descriptions (center control, captures, checks, piece development)
-  - Eliminates the alphabetical/option bias by candidate ranking & semantic descriptions
-  - Multi-question simultaneous evaluation:
-      1. 'move' (choice): Best legal move candidate
-      2. 'position_eval' (score): Strategic position evaluation
-      3. 'in_danger' (noul): King/Queen under threat alert
-  - Real-time ANSI terminal animation with piece glyphs and telemetry HUD
+Bare-face mode (no tactical keyword hints in option text):
+  - 8x8 2D text grid + FEN / side-to-move / material facts only
+  - Neutral move labels: SAN + UCI + piece from→to (no CAPTURES/CHECK/develop tags)
+  - All legal moves offered (capped at 26 via FEN-seeded sample; UCI-sorted aliases)
+  - Multi-question evaluation: move / position_eval / threat_alert
   - Optional GIF recording (--gif) and stub mode (--stub)
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import random
 import sys
 import time
@@ -28,6 +25,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from systemone_lite import SystemOneClient, choice, noul, score
 from systemone_lite.stub import StubEngine
+
+MAX_MOVE_OPTIONS = 26
 
 # ANSI Colors
 CLR_RESET = "\033[0m"
@@ -90,80 +89,35 @@ class CandidateMove:
     san: str
     uci: str
     description: str
-    priority_score: float
+
+
+def _fen_seed(fen: str) -> int:
+    return int(hashlib.sha256(fen.encode()).hexdigest()[:8], 16)
 
 
 def analyze_legal_moves(board: chess.Board) -> list[CandidateMove]:
-    """Score and describe all legal moves with tactical heuristics."""
+    """List legal moves with bare labels (no tactical keyword hints)."""
     candidates: list[CandidateMove] = []
-    center_squares = {chess.E4, chess.D4, chess.E5, chess.D5}
-    is_opening = board.fullmove_number <= 7
-
     for move in board.legal_moves:
-        score_val = 0.0
         san = board.san(move)
         uci = move.uci()
         from_sq = chess.square_name(move.from_square)
         to_sq = chess.square_name(move.to_square)
         piece = board.piece_at(move.from_square)
         p_name = chess.piece_name(piece.piece_type) if piece else "piece"
-
-        desc_parts = [f"{p_name.capitalize()} on {from_sq} to {to_sq}"]
-
-        # 1. Checks
-        if board.gives_check(move):
-            score_val += 50.0
-            desc_parts.append("DELIVERS CHECK to enemy King!")
-
-        # 2. Captures
-        captured = board.piece_at(move.to_square)
-        if captured:
-            victim_val = PIECE_VALUE[captured.piece_type]
-            score_val += 30.0 + victim_val * 5.0
-            desc_parts.append(f"CAPTURES enemy {chess.piece_name(captured.piece_type)} (+{victim_val})")
-        elif board.is_en_passant(move):
-            score_val += 35.0
-            desc_parts.append("CAPTURES pawn en passant")
-
-        # 3. Castling
-        if board.is_castling(move):
-            score_val += 40.0
-            desc_parts.append("CASTLES (secures King safety & activates Rook)")
-
-        # 4. Promotions
-        if move.promotion:
-            score_val += 60.0
-            desc_parts.append(f"PROMOTES to {chess.piece_name(move.promotion)}")
-
-        # 5. Center control
-        if move.to_square in center_squares:
-            score_val += 25.0 if is_opening else 10.0
-            desc_parts.append("controls vital central square")
-
-        # 6. Piece development in opening
-        if is_opening and piece and piece.piece_type in (chess.KNIGHT, chess.BISHOP):
-            from_rank = chess.square_rank(move.from_square)
-            if (piece.color == chess.WHITE and from_rank == 0) or (piece.color == chess.BLACK and from_rank == 7):
-                score_val += 20.0
-                desc_parts.append("develops minor piece into active game")
-
-        # Classical e4/d4/e5/d5 pawn pushes
-        if is_opening and piece and piece.piece_type == chess.PAWN:
-            if uci in ("e2e4", "d2d4", "e7e5", "d7d5"):
-                score_val += 30.0
-                desc_parts.append("classical center opening pawn push")
-
         candidates.append(
             CandidateMove(
                 move=move,
                 san=san,
                 uci=uci,
-                description=", ".join(desc_parts),
-                priority_score=score_val,
+                description=f"{p_name} {from_sq}->{to_sq}",
             )
         )
 
-    # Order candidates neutrally by UCI move notation without heuristic bias
+    if len(candidates) > MAX_MOVE_OPTIONS:
+        rng = random.Random(_fen_seed(board.fen()))
+        candidates = rng.sample(candidates, MAX_MOVE_OPTIONS)
+
     candidates.sort(key=lambda c: c.uci)
     return candidates
 
@@ -189,17 +143,15 @@ class ProperChessGame:
         return white_val, black_val
 
     def build_systemone_payload(self) -> tuple[dict[str, Any], dict[str, Any], dict[str, chess.Move]]:
-        """Construct rich 2D text state and tactical criteria for System One."""
+        """Construct bare 2D board state and neutral move criteria for System One."""
         candidates = analyze_legal_moves(self.board)
         if not candidates:
             raise RuntimeError("No legal moves available")
 
-        # Select top tactical candidates (up to 8 options for crisp choice)
-        top_candidates = candidates[:8]
         alias_to_move: dict[str, chess.Move] = {}
         criteria: dict[str, str] = {}
 
-        for i, cand in enumerate(top_candidates):
+        for i, cand in enumerate(candidates):
             alias = chr(ord("A") + i)
             alias_to_move[alias] = cand.move
             criteria[alias] = f"{cand.san} ({cand.uci}): {cand.description}"
@@ -213,25 +165,25 @@ class ProperChessGame:
             "side_to_move": f"{turn_name} (Turn {self.board.fullmove_number})",
             "is_in_check": self.board.is_check(),
             "material_balance": f"White {white_mat} vs Black {black_mat}",
-            "strategic_phase": "Opening: develop pieces and fight for central squares (e4, d4, e5, d5)" if self.board.fullmove_number <= 7 else "Middlegame / Endgame: tactical control, King safety, material",
+            "legend": "Uppercase=White, lowercase=Black; KQRBNP/kqrbnp; '.'=empty; ranks 8→1.",
         }
 
         questions = {
             "move": choice(
-                f"It is {turn_name}'s turn. Based on the 2D chess board map, choose the best tactical and positional move. "
+                f"It is {turn_name}'s turn. Based on the 2D chess board map, choose one legal move. "
                 "Reply with the option letter from Criteria.",
                 criteria,
             ),
             "position_eval": score(
                 f"Evaluate the current chess position from {turn_name}'s perspective.",
                 [
-                    "Equal position: balanced board and material",
-                    "Slight advantage: better development or center control",
-                    "Clear advantage / Winning: major tactical win or up material",
+                    "Equal",
+                    "Slight advantage",
+                    "Clear advantage",
                 ],
             ),
             "threat_alert": noul(
-                f"Is {turn_name}'s King or a high-value piece currently in immediate danger?"
+                f"Is {turn_name} currently in check or about to lose material on the next reply?"
             ),
         }
 
@@ -311,7 +263,7 @@ class ProperChessGame:
         else:
             sidebar.append(f"  {CLR_BOLD}⚡ Latency:{CLR_RESET} Ready")
 
-        sidebar.append(f"{CLR_BOLD}🧠 Candidate Moves Evaluated (Semantic Tactical Ranking):{CLR_RESET}")
+        sidebar.append(f"{CLR_BOLD}🧠 Candidate Moves (bare labels, UCI-sorted):{CLR_RESET}")
         if last_decision:
             chosen_san = last_decision.get("chosen_san", "N/A")
             conf = last_decision.get("confidence", 0.0)
@@ -413,7 +365,7 @@ class ProperChessGame:
         draw.text((hx0 + 16, curr_y), "SYSTEM ONE CHESS", font=font_title, fill="#38bdf8")
         draw.text((hx0 + panel_w - 110, curr_y + 5), timer_text, font=font_timer, fill="#facc15")
         curr_y += 28
-        draw.text((hx0 + 16, curr_y), "2D Text Grid & Semantic Tactical Engine", font=font_sub, fill="#94a3b8")
+        draw.text((hx0 + 16, curr_y), "2D Text Grid · bare option labels", font=font_sub, fill="#94a3b8")
         curr_y += 22
         draw.line([hx0 + 16, curr_y, hx0 + panel_w - 16, curr_y], fill="#1f2937", width=1)
         curr_y += 12
@@ -443,7 +395,7 @@ class ProperChessGame:
         curr_y += 58
 
         # Candidate Moves Breakdown
-        draw.text((hx0 + 16, curr_y), "Candidates Evaluated (Semantic Tactical Ranking):", font=font_bold, fill="#e2e8f0")
+        draw.text((hx0 + 16, curr_y), "Candidates (bare labels, UCI-sorted):", font=font_bold, fill="#e2e8f0")
         curr_y += 22
 
         if last_decision:
@@ -544,7 +496,7 @@ def play_game(
             }
 
             if gif_path:
-                frames.append(game.render_frame_pil(last_decision, elapsed_ms, avg_lat, elapsed_s))
+                frames.append(game.render_frame_pil(last_decision, elapsed_ms, avg_lat, elapsed_s).copy())
 
             if animate:
                 sys.stdout.write("\033[H")
@@ -559,7 +511,11 @@ def play_game(
         total_elapsed_s = time.perf_counter() - start_time
         avg_lat = sum(latencies) / len(latencies) if latencies else 0.0
         if gif_path:
-            frames.append(game.render_frame_pil(last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s))
+            frames.append(
+                game.render_frame_pil(
+                    last_decision, latencies[-1] if latencies else 0.0, avg_lat, total_elapsed_s
+                ).copy()
+            )
 
         if animate:
             sys.stdout.write("\033[H")
