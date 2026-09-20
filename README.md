@@ -438,9 +438,9 @@ docs/PROPOSAL.md
 
 ## Status
 
-Toy project. Published: general dataset + SFT on Hugging Face. Chess SFT is
-local-only. Limitations: multi-token option keys, weak debate tasks on 0.5B,
-no reliability diagrams / ECE yet (option softmax ≠ population calibration).
+Toy project. Published HF weights are the **mixed** SFT (general gyms + chess
+with `board_2d_map`). Limitations: multi-token option keys, modest debiased
+chess accuracy, weak debate calibration, no ECE curves yet.
 
 ## License
 
