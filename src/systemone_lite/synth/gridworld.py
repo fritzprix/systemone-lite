@@ -180,7 +180,12 @@ def generate_gridworld_samples(
                     instructions="Inspect the 2D GridWorld map. Choose the move direction: UP, DOWN, LEFT, RIGHT.",
                     options=options,
                     label_key=aug_best_action,
-                    meta={"gym": "gridworld", "grid_size": f"{h}x{w}"},
+                    meta={
+                        "gym": "gridworld",
+                        "grid_size": f"{h}x{w}",
+                        "aug_rot_k": rot_k,
+                        "aug_flip_h": flip_h,
+                    },
                     rng=rng,
                     hard=hard,
                 )

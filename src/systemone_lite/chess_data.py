@@ -91,24 +91,11 @@ def describe_piece(board: chess.Board, square_name: str) -> str:
 
 
 def describe_move(board: chess.Board, move: chess.Move) -> str:
+    """Bare destination label only — no capture/check/develop/center coaching."""
     to_sq = chess.square_name(move.to_square)
     note = f"to {to_sq}"
-    captured = board.piece_at(move.to_square)
-    if captured:
-        note += f", capture {chess.piece_name(captured.piece_type)}"
     if move.promotion:
         note += f", promote to {chess.piece_name(move.promotion)}"
-    if board.is_castling(move):
-        note += ", castle"
-    if board.gives_check(move):
-        note += ", check"
-    if to_sq in ["e4", "d4", "e5", "d5"]:
-        note += ", controls center"
-    mover = board.piece_at(move.from_square)
-    if mover and mover.piece_type in (chess.KNIGHT, chess.BISHOP):
-        from_rank = chess.square_rank(move.from_square)
-        if (mover.color == chess.WHITE and from_rank == 0) or (mover.color == chess.BLACK and from_rank == 7):
-            note += ", develops minor piece"
     return note
 
 

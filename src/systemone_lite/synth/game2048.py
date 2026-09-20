@@ -208,7 +208,12 @@ def generate_2048_samples(
                     instructions="Inspect the 4x4 2048 grid. Choose the slide direction: UP, DOWN, LEFT, RIGHT.",
                     options=options,
                     label_key=aug_best_d,
-                    meta={"gym": "game2048", "max_tile": aug_board.max_tile},
+                    meta={
+                        "gym": "game2048",
+                        "max_tile": aug_board.max_tile,
+                        "aug_rot_k": rot_k,
+                        "aug_flip_h": flip_h,
+                    },
                     rng=rng,
                     hard=hard,
                 )

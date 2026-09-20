@@ -93,6 +93,14 @@ def validate_dataset(rows: list[dict], name: str = "Dataset") -> None:
         "boxes_placed",
         "safest and fastest",
         "Prioritize winning",
+        "capture ",
+        ", capture",
+        "develops minor",
+        "controls center",
+        ", check",
+        ", castle",
+        "DELIVERS CHECK",
+        "CAPTURES enemy",
     ]
     aliases_seen = Counter()
     gyms_seen = Counter()

@@ -383,7 +383,12 @@ def generate_sokoban_samples(
                     instructions="Inspect the 2D Sokoban map. Choose the move direction: UP, DOWN, LEFT, RIGHT.",
                     options=action_options,
                     label_key=aug_best_action,
-                    meta={"gym": "sokoban", "level_size": f"{curr_level.height}x{curr_level.width}"},
+                    meta={
+                        "gym": "sokoban",
+                        "level_size": f"{curr_level.height}x{curr_level.width}",
+                        "aug_rot_k": rot_k,
+                        "aug_flip_h": flip_h,
+                    },
                     rng=rng,
                     hard=hard,
                 )

@@ -183,7 +183,11 @@ def generate_connect4_samples(
                     instructions="Inspect the 7x6 Connect Four board. Choose the column (1 to 7) to drop your disc.",
                     options=options,
                     label_key=str(aug_best_col_1based),
-                    meta={"gym": "connect4", "turn": curr_player},
+                    meta={
+                        "gym": "connect4",
+                        "turn": curr_player,
+                        "aug_mirror_h": mirror_h,
+                    },
                     rng=rng,
                     hard=hard,
                 )
