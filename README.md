@@ -134,7 +134,8 @@ general). Checkpoint: `checkpoints/systemone-spatial-v2` (51 200 steps).
 Postmortem: [`docs/NOTE_SPATIAL_V2_POSTMORTEM.md`](docs/NOTE_SPATIAL_V2_POSTMORTEM.md).
 
 Dataset (Hub): [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
-(train 204 800 / test 3 500). Rebuild/audit before trusting new runs:
+(train **228 800** / test **4 300** — spatial + chess + general + CA + word games;
+includes symbol remapping on GridWorld/Sokoban). Rebuild/audit before trusting new runs:
 `python scripts/audit_phase2_distill.py`.
 
 #### Spatial held-out (bare + shuffled; n=500 / gym)
