@@ -345,11 +345,12 @@ Notebook: [`notebooks/phase2_spatial_training_colab.ipynb`](notebooks/phase2_spa
 
 **Dataset is prebuilt** on the Hub:
 [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
-(204 800 train / 3 500 test). Colab only downloads JSONL and trains.
+(228 800 train / 4 300 test; includes CA + word-game diversity). Colab only downloads JSONL and trains.
 
 ```bash
-# Rebuild + re-upload from a machine with the local data/ anchors:
+# Rebuild spatial core + optional diversity merge, then re-upload:
 python scripts/build_phase2_distill.py
+python scripts/build_synth_diversity.py --merge-into-phase2
 python scripts/upload_phase2_hf.py
 ```
 
