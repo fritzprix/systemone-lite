@@ -95,41 +95,100 @@ def score_connect4_position(board: Connect4Board, player: str) -> int:
     return score
 
 
-def best_move_connect4(board: Connect4Board, player: str) -> int:
-    """Fast tactical move selector (immediate win > block opponent win > center)."""
+def best_move_connect4(
+    board: Connect4Board,
+    player: str,
+    rng: random.Random | None = None,
+) -> int:
+    """Fast tactical move selector (win > block > soft center with noise)."""
     legal = board.get_legal_columns()
     if not legal:
         return 3
 
     opp = "Y" if player == "R" else "R"
+    rng = rng or random.Random()
 
-    # 1. Winning move
     for c in legal:
         if board.is_winning_move(c, player):
             return c
 
-    # 2. Block opponent's immediate winning move
     block_col = board.find_immediate_threat(opp)
     if block_col is not None and block_col in legal:
         return block_col
 
-    # 3. Prefer central columns and avoid giving opponent a win
-    scored_moves = []
+    scored_moves: list[tuple[int, float]] = []
     for c in legal:
-        # Don't drop if it allows opponent to win directly above it!
         test_board = Connect4Board([list(row) for row in board.grid], board.turn)
         r = test_board.drop_piece(c, player)
         if r is not None and r > 0 and test_board.is_winning_move(c, opp):
-            blunder_penalty = -1000
+            blunder_penalty = -1000.0
         else:
-            blunder_penalty = 0
-
-        # Center distance bonus
-        center_bonus = 4 - abs(3 - c)
-        scored_moves.append((c, center_bonus * 10 + blunder_penalty))
+            blunder_penalty = 0.0
+        # Soft center preference + noise so edges appear in distill
+        center_bonus = (3 - abs(3 - c)) * 3.0
+        noise = rng.uniform(0.0, 12.0)
+        scored_moves.append((c, center_bonus + blunder_penalty + noise))
 
     scored_moves.sort(key=lambda x: x[1], reverse=True)
     return scored_moves[0][0]
+
+
+def _threat_alert(
+    state: dict[str, Any],
+    has_threat: bool,
+    *,
+    extra_meta: dict[str, Any] | None = None,
+) -> DistillSample:
+    criteria, alias_map = alias_criteria(
+        {
+            "yes": "Opponent has a 4-in-a-row threat next turn",
+            "no": "No immediate winning threat from opponent",
+        }
+    )
+    key_to_alias = {v: k for k, v in alias_map.items()}
+    lbl_key = "yes" if has_threat else "no"
+    meta: dict[str, Any] = {"gym": "connect4", "schema": "noul"}
+    if extra_meta:
+        meta.update(extra_meta)
+    return DistillSample(
+        task="connect4.threat_alert",
+        state=state,
+        instructions="Does the opponent have an immediate 4-in-a-row winning threat next turn?",
+        criteria=criteria,
+        label_alias=key_to_alias[lbl_key],
+        label_key=lbl_key,
+        meta=meta,
+    )
+
+
+def make_horizontal_threat_board(rng: random.Random) -> tuple[Connect4Board, str, int]:
+    """Board where opponent has an immediate horizontal win threat; return (board, to_move, block_col)."""
+    board = Connect4Board([["." for _ in range(COLS)] for _ in range(ROWS)], turn="R")
+    # Bottom-row threat: three Y in a row, open cell on either side → R to move must block
+    start = rng.randint(0, 3)
+    open_offset = rng.choice([-1, 3])
+    open_col = start + open_offset
+    if not (0 <= open_col < COLS):
+        open_col = start + (3 if open_offset < 0 else -1)
+    for i in range(3):
+        board.grid[ROWS - 1][start + i] = "Y"
+    # Ensure open_col is empty and legal (bottom open)
+    board.grid[ROWS - 1][open_col] = "."
+    # Fill other random noise pieces that don't complete wins
+    for _ in range(rng.randint(0, 4)):
+        c = rng.randint(0, COLS - 1)
+        if c == open_col:
+            continue
+        board.drop_piece(c, rng.choice(["R", "Y"]))
+    threat = board.find_immediate_threat("Y")
+    if threat is None:
+        # Force clean bottom threat
+        board = Connect4Board([["." for _ in range(COLS)] for _ in range(ROWS)], turn="R")
+        for i in range(3):
+            board.grid[ROWS - 1][start + i] = "Y"
+        threat = board.find_immediate_threat("Y")
+        assert threat is not None
+    return board, "R", threat
 
 
 def generate_connect4_samples(
@@ -138,11 +197,62 @@ def generate_connect4_samples(
     seed: int = 42,
     hard: bool = False,
 ) -> list[DistillSample]:
-    """Generate synthetic supervised choice/noul/score samples for Connect Four."""
+    """Connect Four distill with diversified drops + balanced threat alerts."""
     rng = random.Random(seed)
     samples: list[DistillSample] = []
+    alert_yes = 0
+    alert_no = 0
+    yes_budget = max(1, n_samples // 5)
 
     while len(samples) < n_samples:
+        # Top-up explicit threat-yes (+ matching block drop)
+        if alert_yes < yes_budget and alert_yes <= alert_no and rng.random() < 0.4:
+            board, to_move, block_col = make_horizontal_threat_board(rng)
+            from systemone_lite.synth.augmentation import apply_connect4_mirror
+
+            mirror_h = rng.random() < 0.5
+            if mirror_h:
+                aug_grid, aug_block = apply_connect4_mirror(board.grid, block_col + 1)
+                aug_board = Connect4Board(grid=aug_grid)
+            else:
+                aug_board = board
+                aug_block = block_col + 1
+            state = {
+                "grid_map": f"\n{aug_board.render_ascii()}\n",
+                "turn": "Red (R)" if to_move == "R" else "Yellow (Y)",
+                "legend": "'R': Red disc, 'Y': Yellow disc, '.': Empty slot. Columns are 1 to 7.",
+            }
+            samples.append(
+                _threat_alert(
+                    state,
+                    True,
+                    extra_meta={"threat_synth": True, "aug_mirror_h": mirror_h},
+                )
+            )
+            alert_yes += 1
+            if len(samples) < n_samples:
+                options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
+                s = choice_sample(
+                    task="connect4.drop",
+                    state=state,
+                    instructions=(
+                        "Inspect the 7x6 Connect Four board. "
+                        "Choose the column (1 to 7) to drop your disc."
+                    ),
+                    options=options,
+                    label_key=str(aug_block),
+                    meta={
+                        "gym": "connect4",
+                        "turn": to_move,
+                        "aug_mirror_h": mirror_h,
+                        "forced_block": True,
+                    },
+                    rng=rng,
+                    hard=hard,
+                )
+                samples.append(s)
+            continue
+
         board = Connect4Board([["." for _ in range(COLS)] for _ in range(ROWS)], turn="R")
         max_turns = rng.randint(4, 25)
 
@@ -155,10 +265,10 @@ def generate_connect4_samples(
 
             curr_player = "R" if turn_idx % 2 == 0 else "Y"
             opp_player = "Y" if curr_player == "R" else "R"
-            best_col = best_move_connect4(board, curr_player)
+            best_col = best_move_connect4(board, curr_player, rng=rng)
 
-            # Apply horizontal mirror reflection (gravity invariant)
             from systemone_lite.synth.augmentation import apply_connect4_mirror
+
             mirror_h = rng.random() < 0.5
             if mirror_h:
                 aug_grid, aug_best_col_1based = apply_connect4_mirror(board.grid, best_col + 1)
@@ -168,19 +278,20 @@ def generate_connect4_samples(
                 aug_best_col_1based = best_col + 1
 
             options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
-
             state = {
                 "grid_map": f"\n{aug_board.render_ascii()}\n",
                 "turn": f"{'Red (R)' if curr_player == 'R' else 'Yellow (Y)'}",
                 "legend": "'R': Red disc, 'Y': Yellow disc, '.': Empty slot. Columns are 1 to 7.",
             }
 
-            # 1. Choice sample: column selection
             if rng.random() < 0.70:
                 s = choice_sample(
                     task="connect4.drop",
                     state=state,
-                    instructions="Inspect the 7x6 Connect Four board. Choose the column (1 to 7) to drop your disc.",
+                    instructions=(
+                        "Inspect the 7x6 Connect Four board. "
+                        "Choose the column (1 to 7) to drop your disc."
+                    ),
                     options=options,
                     label_key=str(aug_best_col_1based),
                     meta={
@@ -193,29 +304,20 @@ def generate_connect4_samples(
                 )
                 samples.append(s)
 
-            # 2. Noul sample: opponent winning threat
-            if len(samples) < n_samples and rng.random() < 0.40:
-                threat_col = aug_board.find_immediate_threat(opp_player)
-                has_threat = threat_col is not None
-                criteria, alias_map = alias_criteria({
-                    "yes": "Opponent has a 4-in-a-row threat next turn",
-                    "no": "No immediate winning threat from opponent",
-                })
-                key_to_alias = {v: k for k, v in alias_map.items()}
-                lbl_key = "yes" if has_threat else "no"
-                samples.append(
-                    DistillSample(
-                        task="connect4.threat_alert",
-                        state=state,
-                        instructions="Does the opponent have an immediate 4-in-a-row winning threat next turn?",
-                        criteria=criteria,
-                        label_alias=key_to_alias[lbl_key],
-                        label_key=lbl_key,
-                        meta={"gym": "connect4", "schema": "noul"},
-                    )
-                )
+            threat_col = aug_board.find_immediate_threat(opp_player)
+            has_threat = threat_col is not None
+            if has_threat and alert_yes <= alert_no and len(samples) < n_samples:
+                samples.append(_threat_alert(state, True))
+                alert_yes += 1
+            elif (
+                (not has_threat)
+                and alert_no <= alert_yes
+                and len(samples) < n_samples
+                and rng.random() < 0.35
+            ):
+                samples.append(_threat_alert(state, False))
+                alert_no += 1
 
-            # Drop move
             r = board.drop_piece(best_col, curr_player)
             if r is not None and board.check_win_at(r, best_col, curr_player):
                 break

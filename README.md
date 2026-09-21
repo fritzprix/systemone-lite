@@ -10,15 +10,15 @@ replacement.
 scoring over **option token ids only** (softmax restricted to the question’s
 criteria / yes–no / score levels). No autoregressive JSON string generation.
 
-**Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoint
-(mixed gyms + chess, from base):
-[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
+**Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoints:
+- Phase 1 mixed (general + chess): [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)
+- Phase 2 spatial: local `checkpoints/systemone-spatial-v2` (gate PASS; HF publish TBD)
 
 ## Key Capabilities & Design Principles
 
-* **⚡ Ultra-Low Latency (~10ms–35ms)**: Evaluates multiple structured questions simultaneously via next-token option-restricted softmax with shared KV cache prefix, achieving **17× to 35× speedup** over autoregressive JSON generation.
-* **🎯 Pure Unbiased Evaluation**: No keyword prompt hacks (`RECOMMENDED`, `OPTIMAL`) or heuristic option order shortcuts. All evaluations rely on raw state representation and neutral option sets.
-* **🗺️ 2D Spatial Environments**: Includes procedural Sokoban, 2048, GridWorld, Connect Four, and Chess environments with synthetic trajectory generation for Phase 2 spatial representation learning.
+* **Low-latency option scoring**: Shared KV prefix + batched next-token softmax over **option ids only** (not free-form JSON). Short payloads are tens of ms on RTX 3060; large states / many questions are slower — see [Measured results](#latency-in-process-no-http).
+* **Bare evaluation**: No keyword coaching (`RECOMMENDED`, `OPTIMAL`, …) or solver overrides when claiming competence. Alias order is shuffled on held-out choice tasks.
+* **2D spatial gyms**: Sokoban, 2048, GridWorld, Connect Four, Chess (`board_2d_map`) with synthetic distill for Phase 2.
 
 ## Measured results
 
@@ -126,17 +126,57 @@ Eval: `data/chess_eval_5k_2d.jsonl` (n=500). Options are letter-aliased and
 Mixed training raises chess above chance without collapsing general tasks.
 Absolute chess accuracy remains modest on this debiased harness.
 
+### Phase 2 spatial SFT (option top-1)
+
+Cold start from base on `data/phase2_train_200k.jsonl` (~204.8k; spatial + chess +
+general). Checkpoint: `checkpoints/systemone-spatial-v2` (51 200 steps).  
+**Gate: PASS.** Report: [`benchmarks/spatial_v2_report.json`](benchmarks/spatial_v2_report.json).  
+Postmortem: [`docs/NOTE_SPATIAL_V2_POSTMORTEM.md`](docs/NOTE_SPATIAL_V2_POSTMORTEM.md).
+
+Dataset (Hub): [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
+(train 204 800 / test 3 500). Rebuild/audit before trusting new runs:
+`python scripts/audit_phase2_distill.py`.
+
+#### Spatial held-out (bare + shuffled; n=500 / gym)
+
+| Gym | Base | Phase 1 mixed | **Spatial v2** | Δ vs P1 |
+|---|---:|---:|---:|---:|
+| Connect4 | 0.168 | 0.158 | **0.754** | +0.596 |
+| Sokoban | 0.336 | 0.174 | **0.506** | +0.332 |
+| 2048 | 0.308 | 0.188 | **0.502** | +0.314 |
+| GridWorld | 0.318 | 0.274 | **0.360** | +0.086 |
+| **Overall** | 0.283 | 0.199 | **0.531** | +0.332 |
+
+#### Anchors (same gate suite)
+
+| Bench | Phase 1 (published / re-run) | Spatial v2 |
+|---|---|---:|
+| Chess 2D shuffled (n=500) | ~0.24 / 0.09 | **0.22** (gate tol −0.03 vs published) |
+| General iid | ~0.78 | **0.91** |
+| General hard | ~0.73 | **0.87** |
+| Invariance (rotated/mirrored) | — | 0.55 (vs canonical 0.53) |
+
+Held-out top-1 ≠ long rollout skill. Bare demos:
+[`benchmarks/demos/`](benchmarks/demos/) (Base / Phase 1 / Phase 2 GIFs).  
+GridWorld remains the weakest spatial gym; post-gate synth fixes (spawn, alert
+balance, leaks) and symbol remapping landed **after** this checkpoint — see postmortem.
+A follow-on continual run (`systemone-spatial-v2b`) may still be in progress; do not
+treat unfinished mid-ckpts as the published Phase 2 result.
+
 ## Resources
 
 | Resource | Link |
 |---|---|
 | Code | [github.com/fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) |
-| Dataset | [dwidlee/systemone-lite-general](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
-| Mixed SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
+| General dataset | [dwidlee/systemone-lite-general](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
+| Phase 2 dataset | [dwidlee/systemone-lite-phase2](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2) |
+| Phase 1 mixed SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
 | Base model | [Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) |
 | System One API (reference) | [docs.typesafe.ai/api.md](https://docs.typesafe.ai/api.md) |
+| Roadmap | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
 | Design notes | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
 | Mixed SFT note | [`docs/NOTE_MIXED_SFT_2026-09-20.md`](docs/NOTE_MIXED_SFT_2026-09-20.md) |
+| Spatial v2 postmortem | [`docs/NOTE_SPATIAL_V2_POSTMORTEM.md`](docs/NOTE_SPATIAL_V2_POSTMORTEM.md) |
 
 ```bash
 systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
@@ -348,7 +388,9 @@ tactical heuristic. Mixed vs base numbers:
 
 ## Interactive Demos & Dry-Runs
 
-> **Bare-face Base vs SFT demos**: See [benchmarks/demos/README.md](benchmarks/demos/README.md) and [`bare_face_report.json`](benchmarks/demos/bare_face_report.json). Prompts have no tactical keyword hints; GridWorld no longer overrides the model with a BFS path.
+> **Bare-face Base / Phase 1 / Phase 2**: [`benchmarks/demos/README.md`](benchmarks/demos/README.md)
+> and [`bare_face_report.json`](benchmarks/demos/bare_face_report.json). No tactical keyword
+> hints; demos do not replace model actions with BFS / `best_move_*`.
 
 System One Lite provides terminal-based interactive environments with live telemetry, ANSI rendering, and `--stub` dry-run modes (which run instantly on CPU without downloading weights):
 
@@ -418,9 +460,15 @@ docs/PROPOSAL.md
 
 ## Status
 
-Toy project. Published HF weights are the **mixed** SFT (general gyms + chess
-with `board_2d_map`). Limitations: multi-token option keys, modest debiased
-chess accuracy, weak debate calibration, no ECE curves yet.
+Toy project. **Published** HF weights are Phase 1 **mixed** SFT (general + chess
+`board_2d_map`): [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).  
+Phase 2 spatial SFT (`checkpoints/systemone-spatial-v2`) **passes** the local gate
+([report](benchmarks/spatial_v2_report.json)); HF model upload TBD. Next core work:
+synth diversity ([#7](https://github.com/fritzprix/systemone-lite/issues/7)) —
+see [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+Limitations: multi-token option keys; modest debiased chess; GridWorld weakest
+among spatial gyms; held-out ≠ long self-play; no ECE curves yet.
 
 ## License
 

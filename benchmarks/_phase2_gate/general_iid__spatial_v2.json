@@ -1,0 +1,60 @@
+{
+  "model": "checkpoints/systemone-spatial-v2b",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/general_eval.jsonl",
+  "n": 3600,
+  "accuracy": 0.8477777777777777,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "debate_judge": {
+      "n": 1200,
+      "accuracy": 0.87
+    },
+    "resource_allocator": {
+      "n": 1200,
+      "accuracy": 0.715
+    },
+    "ticket_dungeon": {
+      "n": 1200,
+      "accuracy": 0.9583333333333334
+    }
+  },
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 400,
+      "accuracy": 0.57
+    },
+    "alloc.fund_next": {
+      "n": 400,
+      "accuracy": 0.98
+    },
+    "alloc.pressure": {
+      "n": 400,
+      "accuracy": 0.595
+    },
+    "debate.confidence": {
+      "n": 400,
+      "accuracy": 0.6975
+    },
+    "debate.enough_evidence": {
+      "n": 400,
+      "accuracy": 0.9925
+    },
+    "debate.winner": {
+      "n": 400,
+      "accuracy": 0.92
+    },
+    "ticket.needs_human": {
+      "n": 400,
+      "accuracy": 0.96
+    },
+    "ticket.route": {
+      "n": 400,
+      "accuracy": 1.0
+    },
+    "ticket.urgency": {
+      "n": 400,
+      "accuracy": 0.915
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "model": "/home/fritzprix/my_works/systemone-lite/checkpoints/systemone-mixed-sft",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/general_eval.jsonl",
+  "n": 3600,
+  "accuracy": 0.7872222222222223,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "debate_judge": {
+      "n": 1200,
+      "accuracy": 0.6216666666666667
+    },
+    "resource_allocator": {
+      "n": 1200,
+      "accuracy": 0.755
+    },
+    "ticket_dungeon": {
+      "n": 1200,
+      "accuracy": 0.985
+    }
+  },
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 400,
+      "accuracy": 0.615
+    },
+    "alloc.fund_next": {
+      "n": 400,
+      "accuracy": 0.975
+    },
+    "alloc.pressure": {
+      "n": 400,
+      "accuracy": 0.675
+    },
+    "debate.confidence": {
+      "n": 400,
+      "accuracy": 0.4875
+    },
+    "debate.enough_evidence": {
+      "n": 400,
+      "accuracy": 0.5725
+    },
+    "debate.winner": {
+      "n": 400,
+      "accuracy": 0.805
+    },
+    "ticket.needs_human": {
+      "n": 400,
+      "accuracy": 0.9875
+    },
+    "ticket.route": {
+      "n": 400,
+      "accuracy": 1.0
+    },
+    "ticket.urgency": {
+      "n": 400,
+      "accuracy": 0.9675
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/phase2_eval_4k.jsonl",
+  "n": 2000,
+  "accuracy": 0.2825,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "connect4": {
+      "n": 500,
+      "accuracy": 0.168
+    },
+    "game2048": {
+      "n": 500,
+      "accuracy": 0.308
+    },
+    "gridworld": {
+      "n": 500,
+      "accuracy": 0.318
+    },
+    "sokoban": {
+      "n": 500,
+      "accuracy": 0.336
+    }
+  },
+  "per_task": {
+    "connect4.drop": {
+      "n": 315,
+      "accuracy": 0.17142857142857143
+    },
+    "connect4.threat_alert": {
+      "n": 185,
+      "accuracy": 0.16216216216216217
+    },
+    "game2048.overflow_alert": {
+      "n": 161,
+      "accuracy": 0.4409937888198758
+    },
+    "game2048.slide": {
+      "n": 339,
+      "accuracy": 0.2448377581120944
+    },
+    "gridworld.hazard_alert": {
+      "n": 195,
+      "accuracy": 0.4564102564102564
+    },
+    "gridworld.move": {
+      "n": 305,
+      "accuracy": 0.22950819672131148
+    },
+    "sokoban.deadlock_alert": {
+      "n": 171,
+      "accuracy": 0.5029239766081871
+    },
+    "sokoban.direction": {
+      "n": 329,
+      "accuracy": 0.24924012158054712
+    }
+  }
+}

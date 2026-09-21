@@ -1,0 +1,20 @@
+{
+  "model": "checkpoints/systemone-spatial-v2b",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/chess_eval_5k_2d.jsonl",
+  "n": 500,
+  "accuracy": 0.076,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "chess": {
+      "n": 500,
+      "accuracy": 0.076
+    }
+  },
+  "per_task": {
+    "move": {
+      "n": 500,
+      "accuracy": 0.076
+    }
+  }
+}

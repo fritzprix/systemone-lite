@@ -1,0 +1,61 @@
+{
+  "note": "Temperature scales option logits before softmax; argmax accuracy unchanged for T>0.",
+  "mixed_sft_T1": {
+    "accuracy_pct": 45.89,
+    "ece": 0.2211
+  },
+  "spatial_v2b": [
+    {
+      "temperature": 1.0,
+      "accuracy_pct": 43.72,
+      "ece": 0.3058
+    },
+    {
+      "temperature": 1.2,
+      "accuracy_pct": 43.72,
+      "ece": 0.2731
+    },
+    {
+      "temperature": 1.3,
+      "accuracy_pct": 43.72,
+      "ece": 0.2577
+    },
+    {
+      "temperature": 1.4,
+      "accuracy_pct": 43.72,
+      "ece": 0.243
+    },
+    {
+      "temperature": 1.6,
+      "accuracy_pct": 43.72,
+      "ece": 0.2169
+    }
+  ],
+  "spatial_v2": [
+    {
+      "temperature": 1.0,
+      "accuracy_pct": 42.86,
+      "ece": 0.3584
+    },
+    {
+      "temperature": 1.2,
+      "accuracy_pct": 42.86,
+      "ece": 0.3254
+    },
+    {
+      "temperature": 1.3,
+      "accuracy_pct": 42.86,
+      "ece": 0.3129
+    },
+    {
+      "temperature": 1.4,
+      "accuracy_pct": 42.86,
+      "ece": 0.3006
+    },
+    {
+      "temperature": 1.6,
+      "accuracy_pct": 42.86,
+      "ece": 0.2769
+    }
+  ]
+}

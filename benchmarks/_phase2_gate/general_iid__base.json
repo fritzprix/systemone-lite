@@ -1,0 +1,60 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/general_eval.jsonl",
+  "n": 3600,
+  "accuracy": 0.445,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "debate_judge": {
+      "n": 1200,
+      "accuracy": 0.42083333333333334
+    },
+    "resource_allocator": {
+      "n": 1200,
+      "accuracy": 0.39666666666666667
+    },
+    "ticket_dungeon": {
+      "n": 1200,
+      "accuracy": 0.5175
+    }
+  },
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 400,
+      "accuracy": 0.575
+    },
+    "alloc.fund_next": {
+      "n": 400,
+      "accuracy": 0.285
+    },
+    "alloc.pressure": {
+      "n": 400,
+      "accuracy": 0.33
+    },
+    "debate.confidence": {
+      "n": 400,
+      "accuracy": 0.27
+    },
+    "debate.enough_evidence": {
+      "n": 400,
+      "accuracy": 0.475
+    },
+    "debate.winner": {
+      "n": 400,
+      "accuracy": 0.5175
+    },
+    "ticket.needs_human": {
+      "n": 400,
+      "accuracy": 0.6425
+    },
+    "ticket.route": {
+      "n": 400,
+      "accuracy": 0.525
+    },
+    "ticket.urgency": {
+      "n": 400,
+      "accuracy": 0.385
+    }
+  }
+}

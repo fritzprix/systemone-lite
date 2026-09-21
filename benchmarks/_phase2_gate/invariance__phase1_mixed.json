@@ -1,0 +1,60 @@
+{
+  "model": "/home/fritzprix/my_works/systemone-lite/checkpoints/systemone-mixed-sft",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/phase2_eval_invariance.jsonl",
+  "n": 800,
+  "accuracy": 0.2025,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "connect4": {
+      "n": 200,
+      "accuracy": 0.215
+    },
+    "game2048": {
+      "n": 200,
+      "accuracy": 0.165
+    },
+    "gridworld": {
+      "n": 200,
+      "accuracy": 0.275
+    },
+    "sokoban": {
+      "n": 200,
+      "accuracy": 0.155
+    }
+  },
+  "per_task": {
+    "connect4.drop": {
+      "n": 126,
+      "accuracy": 0.31746031746031744
+    },
+    "connect4.threat_alert": {
+      "n": 74,
+      "accuracy": 0.04054054054054054
+    },
+    "game2048.overflow_alert": {
+      "n": 68,
+      "accuracy": 0.014705882352941176
+    },
+    "game2048.slide": {
+      "n": 132,
+      "accuracy": 0.24242424242424243
+    },
+    "gridworld.hazard_alert": {
+      "n": 77,
+      "accuracy": 0.3116883116883117
+    },
+    "gridworld.move": {
+      "n": 123,
+      "accuracy": 0.25203252032520324
+    },
+    "sokoban.deadlock_alert": {
+      "n": 70,
+      "accuracy": 0.0
+    },
+    "sokoban.direction": {
+      "n": 130,
+      "accuracy": 0.23846153846153847
+    }
+  }
+}

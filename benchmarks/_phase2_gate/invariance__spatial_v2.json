@@ -1,0 +1,60 @@
+{
+  "model": "checkpoints/systemone-spatial-v2b",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/phase2_eval_invariance.jsonl",
+  "n": 800,
+  "accuracy": 0.25625,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "connect4": {
+      "n": 200,
+      "accuracy": 0.31
+    },
+    "game2048": {
+      "n": 200,
+      "accuracy": 0.2
+    },
+    "gridworld": {
+      "n": 200,
+      "accuracy": 0.325
+    },
+    "sokoban": {
+      "n": 200,
+      "accuracy": 0.19
+    }
+  },
+  "per_task": {
+    "connect4.drop": {
+      "n": 126,
+      "accuracy": 0.46825396825396826
+    },
+    "connect4.threat_alert": {
+      "n": 74,
+      "accuracy": 0.04054054054054054
+    },
+    "game2048.overflow_alert": {
+      "n": 68,
+      "accuracy": 0.029411764705882353
+    },
+    "game2048.slide": {
+      "n": 132,
+      "accuracy": 0.2878787878787879
+    },
+    "gridworld.hazard_alert": {
+      "n": 77,
+      "accuracy": 0.37662337662337664
+    },
+    "gridworld.move": {
+      "n": 123,
+      "accuracy": 0.2926829268292683
+    },
+    "sokoban.deadlock_alert": {
+      "n": 70,
+      "accuracy": 0.0
+    },
+    "sokoban.direction": {
+      "n": 130,
+      "accuracy": 0.2923076923076923
+    }
+  }
+}

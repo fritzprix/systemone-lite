@@ -23,7 +23,7 @@
           "Ra1",
           "Ra8"
         ],
-        "avg_latency_ms": 380.2,
+        "avg_latency_ms": 374.8,
         "result": "Max plies reached"
       },
       "chess_multistep": {
@@ -40,30 +40,30 @@
           "Ra1",
           "Ra5"
         ],
-        "avg_latency_ms": 69.7,
+        "avg_latency_ms": 74.0,
         "result": ""
       },
       "game2048": {
         "steps": 15,
         "score": 32,
         "max_tile": 8,
-        "avg_latency_ms": 28.7
+        "avg_latency_ms": 29.9
       },
       "gridworld": {
         "steps": 10,
         "won": false,
         "died": false,
-        "avg_latency_ms": 29.8
+        "avg_latency_ms": 30.9
       },
       "sokoban": {
         "steps": 10,
         "won": false,
-        "avg_latency_ms": 27.1
+        "avg_latency_ms": 29.3
       },
       "connect4": {
         "turns": 12,
         "winner": null,
-        "avg_latency_ms": 28.6
+        "avg_latency_ms": 29.4
       }
     },
     "sft_model": {
@@ -83,7 +83,7 @@
           "Ra1",
           "Ra8"
         ],
-        "avg_latency_ms": 157.0,
+        "avg_latency_ms": 154.9,
         "result": "Max plies reached"
       },
       "chess_multistep": {
@@ -100,30 +100,150 @@
           "Ra1",
           "Ra8"
         ],
-        "avg_latency_ms": 63.3,
+        "avg_latency_ms": 67.8,
         "result": ""
       },
       "game2048": {
         "steps": 15,
         "score": 36,
         "max_tile": 8,
-        "avg_latency_ms": 28.5
+        "avg_latency_ms": 29.7
       },
       "gridworld": {
         "steps": 10,
         "won": false,
         "died": false,
-        "avg_latency_ms": 29.3
+        "avg_latency_ms": 30.5
       },
       "sokoban": {
         "steps": 10,
         "won": false,
-        "avg_latency_ms": 25.9
+        "avg_latency_ms": 26.8
       },
       "connect4": {
         "turns": 12,
         "winner": null,
-        "avg_latency_ms": 28.8
+        "avg_latency_ms": 30.1
+      }
+    },
+    "spatial_v2": {
+      "model": "/home/fritzprix/my_works/systemone-lite/checkpoints/systemone-spatial-v2",
+      "tag": "spatial_v2",
+      "chess_proper": {
+        "plies": 10,
+        "moves": [
+          "d4",
+          "f6",
+          "d5",
+          "e5",
+          "dxe6",
+          "b6",
+          "Nf3",
+          "d5",
+          "Nd4",
+          "Ne7"
+        ],
+        "avg_latency_ms": 245.2,
+        "result": "Max plies reached"
+      },
+      "chess_multistep": {
+        "plies": 10,
+        "moves": [
+          "c3",
+          "Nf6",
+          "Nf3",
+          "h5",
+          "c4",
+          "h4",
+          "c5",
+          "h3",
+          "c6",
+          "Nxc6"
+        ],
+        "avg_latency_ms": 68.8,
+        "result": ""
+      },
+      "game2048": {
+        "steps": 15,
+        "score": 60,
+        "max_tile": 16,
+        "avg_latency_ms": 30.0
+      },
+      "gridworld": {
+        "steps": 10,
+        "won": false,
+        "died": false,
+        "avg_latency_ms": 30.6
+      },
+      "sokoban": {
+        "steps": 10,
+        "won": false,
+        "avg_latency_ms": 26.9
+      },
+      "connect4": {
+        "turns": 12,
+        "winner": null,
+        "avg_latency_ms": 31.5
+      }
+    },
+    "spatial_v2b": {
+      "model": "/home/fritzprix/my_works/systemone-lite/checkpoints/systemone-spatial-v2b",
+      "tag": "spatial_v2b",
+      "chess_proper": {
+        "plies": 10,
+        "moves": [
+          "b4",
+          "Nc6",
+          "Ba3",
+          "Na5",
+          "c3",
+          "b5",
+          "d4",
+          "Rb8",
+          "Qc1",
+          "c5"
+        ],
+        "avg_latency_ms": 232.9,
+        "result": "Max plies reached"
+      },
+      "chess_multistep": {
+        "plies": 10,
+        "moves": [
+          "e4",
+          "e5",
+          "Qf3",
+          "Qf6",
+          "Kd1",
+          "Kd8",
+          "d4",
+          "Ke7",
+          "Ke2",
+          "exd4"
+        ],
+        "avg_latency_ms": 70.6,
+        "result": ""
+      },
+      "game2048": {
+        "steps": 15,
+        "score": 60,
+        "max_tile": 16,
+        "avg_latency_ms": 30.8
+      },
+      "gridworld": {
+        "steps": 1,
+        "won": false,
+        "died": true,
+        "avg_latency_ms": 32.5
+      },
+      "sokoban": {
+        "steps": 10,
+        "won": false,
+        "avg_latency_ms": 27.7
+      },
+      "connect4": {
+        "turns": 12,
+        "winner": null,
+        "avg_latency_ms": 30.1
       }
     }
   }

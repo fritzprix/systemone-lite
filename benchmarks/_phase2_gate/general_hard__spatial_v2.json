@@ -1,0 +1,60 @@
+{
+  "model": "checkpoints/systemone-spatial-v2b",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/general_eval_hard.jsonl",
+  "n": 5400,
+  "accuracy": 0.7759259259259259,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "debate_judge": {
+      "n": 1800,
+      "accuracy": 0.7955555555555556
+    },
+    "resource_allocator": {
+      "n": 1800,
+      "accuracy": 0.6877777777777778
+    },
+    "ticket_dungeon": {
+      "n": 1800,
+      "accuracy": 0.8444444444444444
+    }
+  },
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 600,
+      "accuracy": 0.5583333333333333
+    },
+    "alloc.fund_next": {
+      "n": 600,
+      "accuracy": 0.875
+    },
+    "alloc.pressure": {
+      "n": 600,
+      "accuracy": 0.63
+    },
+    "debate.confidence": {
+      "n": 600,
+      "accuracy": 0.75
+    },
+    "debate.enough_evidence": {
+      "n": 600,
+      "accuracy": 0.9083333333333333
+    },
+    "debate.winner": {
+      "n": 600,
+      "accuracy": 0.7283333333333334
+    },
+    "ticket.needs_human": {
+      "n": 600,
+      "accuracy": 0.9066666666666666
+    },
+    "ticket.route": {
+      "n": 600,
+      "accuracy": 0.9916666666666667
+    },
+    "ticket.urgency": {
+      "n": 600,
+      "accuracy": 0.635
+    }
+  }
+}

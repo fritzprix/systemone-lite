@@ -1,0 +1,352 @@
+{
+  "train": {
+    "checkpoint": "checkpoints/systemone-spatial-v2",
+    "phase1_checkpoint": "checkpoints/systemone-mixed-sft",
+    "base_model": "Qwen/Qwen2.5-0.5B-Instruct"
+  },
+  "suites": {
+    "spatial_heldout": {
+      "base": {
+        "n": 2000,
+        "accuracy": 0.2825,
+        "per_gym": {
+          "connect4": {
+            "n": 500,
+            "accuracy": 0.168
+          },
+          "game2048": {
+            "n": 500,
+            "accuracy": 0.308
+          },
+          "gridworld": {
+            "n": 500,
+            "accuracy": 0.318
+          },
+          "sokoban": {
+            "n": 500,
+            "accuracy": 0.336
+          }
+        }
+      },
+      "phase1_mixed": {
+        "n": 2000,
+        "accuracy": 0.1985,
+        "per_gym": {
+          "connect4": {
+            "n": 500,
+            "accuracy": 0.158
+          },
+          "game2048": {
+            "n": 500,
+            "accuracy": 0.188
+          },
+          "gridworld": {
+            "n": 500,
+            "accuracy": 0.274
+          },
+          "sokoban": {
+            "n": 500,
+            "accuracy": 0.174
+          }
+        }
+      },
+      "spatial_v2": {
+        "n": 2000,
+        "accuracy": 0.5305,
+        "per_gym": {
+          "connect4": {
+            "n": 500,
+            "accuracy": 0.754
+          },
+          "game2048": {
+            "n": 500,
+            "accuracy": 0.502
+          },
+          "gridworld": {
+            "n": 500,
+            "accuracy": 0.36
+          },
+          "sokoban": {
+            "n": 500,
+            "accuracy": 0.506
+          }
+        }
+      }
+    },
+    "invariance": {
+      "base": {
+        "n": 800,
+        "accuracy": 0.32125,
+        "per_gym": {
+          "connect4": {
+            "n": 200,
+            "accuracy": 0.18
+          },
+          "game2048": {
+            "n": 200,
+            "accuracy": 0.33
+          },
+          "gridworld": {
+            "n": 200,
+            "accuracy": 0.395
+          },
+          "sokoban": {
+            "n": 200,
+            "accuracy": 0.38
+          }
+        }
+      },
+      "phase1_mixed": {
+        "n": 800,
+        "accuracy": 0.2025,
+        "per_gym": {
+          "connect4": {
+            "n": 200,
+            "accuracy": 0.215
+          },
+          "game2048": {
+            "n": 200,
+            "accuracy": 0.165
+          },
+          "gridworld": {
+            "n": 200,
+            "accuracy": 0.275
+          },
+          "sokoban": {
+            "n": 200,
+            "accuracy": 0.155
+          }
+        }
+      },
+      "spatial_v2": {
+        "n": 800,
+        "accuracy": 0.5475,
+        "per_gym": {
+          "connect4": {
+            "n": 200,
+            "accuracy": 0.755
+          },
+          "game2048": {
+            "n": 200,
+            "accuracy": 0.52
+          },
+          "gridworld": {
+            "n": 200,
+            "accuracy": 0.375
+          },
+          "sokoban": {
+            "n": 200,
+            "accuracy": 0.54
+          }
+        }
+      }
+    },
+    "chess_move_2d": {
+      "base": {
+        "n": 500,
+        "accuracy": 0.06,
+        "per_gym": {
+          "chess": {
+            "n": 500,
+            "accuracy": 0.06
+          }
+        }
+      },
+      "phase1_mixed": {
+        "n": 500,
+        "accuracy": 0.09,
+        "per_gym": {
+          "chess": {
+            "n": 500,
+            "accuracy": 0.09
+          }
+        }
+      },
+      "spatial_v2": {
+        "n": 500,
+        "accuracy": 0.22,
+        "per_gym": {
+          "chess": {
+            "n": 500,
+            "accuracy": 0.22
+          }
+        }
+      }
+    },
+    "general_iid": {
+      "base": {
+        "n": 3600,
+        "accuracy": 0.445,
+        "per_gym": {
+          "debate_judge": {
+            "n": 1200,
+            "accuracy": 0.42083333333333334
+          },
+          "resource_allocator": {
+            "n": 1200,
+            "accuracy": 0.39666666666666667
+          },
+          "ticket_dungeon": {
+            "n": 1200,
+            "accuracy": 0.5175
+          }
+        }
+      },
+      "phase1_mixed": {
+        "n": 3600,
+        "accuracy": 0.7872222222222223,
+        "per_gym": {
+          "debate_judge": {
+            "n": 1200,
+            "accuracy": 0.6216666666666667
+          },
+          "resource_allocator": {
+            "n": 1200,
+            "accuracy": 0.755
+          },
+          "ticket_dungeon": {
+            "n": 1200,
+            "accuracy": 0.985
+          }
+        }
+      },
+      "spatial_v2": {
+        "n": 3600,
+        "accuracy": 0.9138888888888889,
+        "per_gym": {
+          "debate_judge": {
+            "n": 1200,
+            "accuracy": 0.9541666666666667
+          },
+          "resource_allocator": {
+            "n": 1200,
+            "accuracy": 0.805
+          },
+          "ticket_dungeon": {
+            "n": 1200,
+            "accuracy": 0.9825
+          }
+        }
+      }
+    },
+    "general_hard": {
+      "base": {
+        "n": 5400,
+        "accuracy": 0.43018518518518517,
+        "per_gym": {
+          "debate_judge": {
+            "n": 1800,
+            "accuracy": 0.4066666666666667
+          },
+          "resource_allocator": {
+            "n": 1800,
+            "accuracy": 0.3983333333333333
+          },
+          "ticket_dungeon": {
+            "n": 1800,
+            "accuracy": 0.4855555555555556
+          }
+        }
+      },
+      "phase1_mixed": {
+        "n": 5400,
+        "accuracy": 0.7340740740740741,
+        "per_gym": {
+          "debate_judge": {
+            "n": 1800,
+            "accuracy": 0.5877777777777777
+          },
+          "resource_allocator": {
+            "n": 1800,
+            "accuracy": 0.7272222222222222
+          },
+          "ticket_dungeon": {
+            "n": 1800,
+            "accuracy": 0.8872222222222222
+          }
+        }
+      },
+      "spatial_v2": {
+        "n": 5400,
+        "accuracy": 0.8701851851851852,
+        "per_gym": {
+          "debate_judge": {
+            "n": 1800,
+            "accuracy": 0.9411111111111111
+          },
+          "resource_allocator": {
+            "n": 1800,
+            "accuracy": 0.8016666666666666
+          },
+          "ticket_dungeon": {
+            "n": 1800,
+            "accuracy": 0.8677777777777778
+          }
+        }
+      }
+    }
+  },
+  "gates": {
+    "spatial_lift_vs_phase1": {
+      "pass": true,
+      "per_gym_delta": {
+        "connect4": {
+          "phase1_mixed": 0.158,
+          "spatial_v2": 0.754,
+          "delta": 0.596,
+          "n": 500
+        },
+        "game2048": {
+          "phase1_mixed": 0.188,
+          "spatial_v2": 0.502,
+          "delta": 0.314,
+          "n": 500
+        },
+        "gridworld": {
+          "phase1_mixed": 0.274,
+          "spatial_v2": 0.36,
+          "delta": 0.08599999999999997,
+          "n": 500
+        },
+        "sokoban": {
+          "phase1_mixed": 0.174,
+          "spatial_v2": 0.506,
+          "delta": 0.332,
+          "n": 500
+        }
+      },
+      "rule": "each spatial gym \u0394 > +0.05 vs Phase 1 mixed"
+    },
+    "chess_no_regress": {
+      "pass": true,
+      "spatial_v2": 0.22,
+      "phase1_published": 0.236,
+      "phase1_rerun": 0.09,
+      "tolerance": -0.03,
+      "rule": "chess shuffled 2D \u2265 published 0.24 \u2212 0.03"
+    },
+    "general_no_catastrophic_forget": {
+      "pass": true,
+      "iid": {
+        "spatial_v2": 0.9138888888888889,
+        "phase1_published": 0.7813888888888889,
+        "phase1_rerun": 0.7872222222222223
+      },
+      "hard": {
+        "spatial_v2": 0.8701851851851852,
+        "phase1_published": 0.7333333333333333,
+        "phase1_rerun": 0.7340740740740741
+      },
+      "tolerance": -0.05,
+      "rule": "general iid/hard within \u22120.05 of Phase 1 published"
+    },
+    "invariance_not_collapse": {
+      "pass": true,
+      "invariance": 0.5475,
+      "canonical_spatial": 0.5305,
+      "tolerance": -0.08,
+      "rule": "invariance accuracy within \u22120.08 of spatial held-out"
+    }
+  },
+  "gate_pass": true
+}

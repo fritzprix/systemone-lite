@@ -34,6 +34,9 @@ viral = [
 chess = [
   "chess>=1.10",
 ]
+train = [
+  "wandb>=0.18.0",
+]
 
 [project.scripts]
 systemone-lite = "systemone_lite.api:main"

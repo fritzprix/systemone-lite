@@ -27,6 +27,9 @@ from systemone_lite.synth.connect4 import generate_connect4_samples
 from systemone_lite.synth.game2048 import generate_2048_samples
 from systemone_lite.synth.gridworld import generate_gridworld_samples
 from systemone_lite.synth.sokoban import generate_sokoban_samples
+# Diversity axes (#7): also available via scripts/build_synth_diversity.py
+# from systemone_lite.synth.cellular_automata import generate_ca_samples
+# from systemone_lite.synth.word_games import generate_word_game_samples
 
 ROOT = Path(__file__).resolve().parents[1]
 

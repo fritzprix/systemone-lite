@@ -1,0 +1,20 @@
+{
+  "model": "/home/fritzprix/my_works/systemone-lite/checkpoints/systemone-mixed-sft",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/chess_eval_5k_2d.jsonl",
+  "n": 500,
+  "accuracy": 0.09,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "chess": {
+      "n": 500,
+      "accuracy": 0.09
+    }
+  },
+  "per_task": {
+    "move": {
+      "n": 500,
+      "accuracy": 0.09
+    }
+  }
+}

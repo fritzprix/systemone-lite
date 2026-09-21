@@ -119,8 +119,11 @@ def _encode_symbol(
 def _softmax_over_ids(
     logits: torch.Tensor,
     token_ids: list[int],
+    temperature: float = 1.0,
 ) -> list[float]:
     selected = logits[token_ids]
+    if temperature > 0 and temperature != 1.0:
+        selected = selected / temperature
     probs = torch.softmax(selected.float(), dim=-1)
     return [float(p) for p in probs.tolist()]
 
@@ -170,15 +173,26 @@ def _suffix_position_ids(
 
 
 class SystemOneEngine:
-    def __init__(self, loaded: LoadedModel, *, use_prefix_cache: bool = True) -> None:
+    def __init__(
+        self,
+        loaded: LoadedModel,
+        *,
+        use_prefix_cache: bool = True,
+        temperature: float = 1.0,
+    ) -> None:
         self._loaded = loaded
         self.use_prefix_cache = use_prefix_cache
+        self.temperature = float(temperature)
 
     @property
     def concrete_model_id(self) -> str:
         return self._loaded.resolved_id
 
-    def decide(self, request: SystemOneRequest) -> SystemOneResponse:
+    def decide(
+        self,
+        request: SystemOneRequest,
+        temperature: float | None = None,
+    ) -> SystemOneResponse:
         items = list(request.questions.items())
         if not items:
             return SystemOneResponse(
@@ -187,14 +201,16 @@ class SystemOneEngine:
                 usage=Usage(input_tokens=0, output_tokens=0),
             )
 
+        temp = self.temperature if temperature is None else float(temperature)
         if self.use_prefix_cache and len(items) >= 2:
-            return self._decide_with_prefix_cache(request, items)
-        return self._decide_naive_batch(request, items)
+            return self._decide_with_prefix_cache(request, items, temperature=temp)
+        return self._decide_naive_batch(request, items, temperature=temp)
 
     def _decide_naive_batch(
         self,
         request: SystemOneRequest,
         items: list[tuple[str, Any]],
+        temperature: float = 1.0,
     ) -> SystemOneResponse:
         from systemone_lite.prompt import build_prompt
 
@@ -217,36 +233,27 @@ class SystemOneEngine:
                 last_idx,
             ]
 
-        return self._assemble(items, batch_logits, total_input_tokens)
+        return self._assemble(items, batch_logits, total_input_tokens, temperature=temperature)
 
     def _decide_with_prefix_cache(
         self,
         request: SystemOneRequest,
         items: list[tuple[str, Any]],
+        temperature: float = 1.0,
     ) -> SystemOneResponse:
         tokenizer = self._loaded.tokenizer
         device = self._loaded.device
         batch_size = len(items)
 
-        prefix_text = build_state_prefix(request.state)
+        from systemone_lite.prompt import build_question_suffix, build_state_prefix
+
+        prefix = build_state_prefix(request.state)
+        prefix_encoded = tokenizer(prefix, return_tensors="pt", add_special_tokens=False)
+        prefix_ids = prefix_encoded["input_ids"].to(device)
+        prefix_mask = prefix_encoded["attention_mask"].to(device)
+        prefix_len = prefix_ids.size(1)
+
         suffixes = [build_question_suffix(question) for _, question in items]
-
-        # Reserve room for the longest suffix so the shared state still fits.
-        suffix_token_lens = [
-            len(tokenizer.encode(suffix, add_special_tokens=False)) for suffix in suffixes
-        ]
-        max_suffix_len = max(suffix_token_lens)
-        prefix_budget = max(16, MAX_LENGTH - max_suffix_len)
-
-        prefix_ids = tokenizer(
-            prefix_text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=prefix_budget,
-            add_special_tokens=True,
-        )["input_ids"].to(device)
-        prefix_len = int(prefix_ids.shape[1])
-        prefix_mask = torch.ones((1, prefix_len), dtype=torch.long, device=device)
 
         suffix_encoded = tokenizer(
             suffixes,
@@ -293,13 +300,14 @@ class SystemOneEngine:
                 last_idx,
             ]
 
-        return self._assemble(items, batch_logits, total_input_tokens)
+        return self._assemble(items, batch_logits, total_input_tokens, temperature=temperature)
 
     def _assemble(
         self,
         items: list[tuple[str, Any]],
         batch_logits: torch.Tensor,
         total_input_tokens: int,
+        temperature: float = 1.0,
     ) -> SystemOneResponse:
         answers: dict[str, Answer] = {}
         for row, (qid, question) in enumerate(items):
@@ -307,7 +315,7 @@ class SystemOneEngine:
             token_ids = [
                 _encode_symbol(self._loaded.tokenizer, symbol) for symbol in symbols
             ]
-            probs_list = _softmax_over_ids(batch_logits[row], token_ids)
+            probs_list = _softmax_over_ids(batch_logits[row], token_ids, temperature=temperature)
             probabilities = {
                 symbol: prob for symbol, prob in zip(symbols, probs_list, strict=True)
             }
@@ -332,13 +340,24 @@ def set_default_model(model_id: str) -> None:
     reset_engine()
 
 
-def get_engine(model_id: str | None = None) -> SystemOneEngine:
+def get_engine(
+    model_id: str | None = None,
+    temperature: float = 1.0,
+) -> SystemOneEngine:
     global _ENGINE
     if model_id is None:
         model_id = DEFAULT_MODEL_ID
     resolved = resolve_model_id(model_id)
-    if _ENGINE is None or _ENGINE.concrete_model_id != resolved:
-        _ENGINE = SystemOneEngine(load_model(model_id), use_prefix_cache=True)
+    if (
+        _ENGINE is None
+        or _ENGINE.concrete_model_id != resolved
+        or _ENGINE.temperature != float(temperature)
+    ):
+        _ENGINE = SystemOneEngine(
+            load_model(model_id),
+            use_prefix_cache=True,
+            temperature=temperature,
+        )
     return _ENGINE
 
 

@@ -22,7 +22,9 @@ from systemone_lite.infer import reset_engine  # noqa: E402
 OUT = ROOT / "benchmarks" / "demos"
 MODELS = {
     "base_model": "Qwen/Qwen2.5-0.5B-Instruct",
-    "sft_model": str(ROOT / "checkpoints" / "systemone-mixed-sft"),
+    "sft_model": str(ROOT / "checkpoints" / "systemone-mixed-sft"),  # Phase 1
+    "spatial_v2": str(ROOT / "checkpoints" / "systemone-spatial-v2"),  # Phase 2 gate
+    "spatial_v2b": str(ROOT / "checkpoints" / "systemone-spatial-v2b"),  # continual 20k
 }
 
 
@@ -145,7 +147,26 @@ def run_one(tag: str, model: str) -> dict:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Regenerate bare-face demos")
+    parser.add_argument(
+        "--only",
+        default="",
+        help="Comma-separated MODEL tags to run (default: all)",
+    )
+    args = parser.parse_args()
+    selected = (
+        {t.strip() for t in args.only.split(",") if t.strip()}
+        if args.only
+        else set(MODELS)
+    )
+    unknown = selected - set(MODELS)
+    if unknown:
+        raise SystemExit(f"unknown --only tags: {sorted(unknown)}")
+
     OUT.mkdir(parents=True, exist_ok=True)
+    report_path = OUT / "bare_face_report.json"
     report = {
         "protocol": {
             "hints": "removed (no CAPTURES/CHECK/develop/RECOMMENDED/BLOCKED/DEADLY tags in option text)",
@@ -155,12 +176,20 @@ def main() -> None:
         },
         "runs": {},
     }
+    if report_path.exists() and args.only:
+        try:
+            prev = json.loads(report_path.read_text(encoding="utf-8"))
+            report["runs"] = dict(prev.get("runs") or {})
+        except json.JSONDecodeError:
+            pass
+
     for tag, model in MODELS.items():
+        if tag not in selected:
+            continue
         report["runs"][tag] = run_one(tag, model)
 
-    out_json = OUT / "bare_face_report.json"
-    out_json.write_text(json.dumps(report, indent=2) + "\n")
-    print(f"\nWrote {out_json}", flush=True)
+    report_path.write_text(json.dumps(report, indent=2) + "\n")
+    print(f"\nWrote {report_path}", flush=True)
 
 
 if __name__ == "__main__":

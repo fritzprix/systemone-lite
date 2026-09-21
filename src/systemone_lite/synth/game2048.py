@@ -156,17 +156,92 @@ def best_move_2048(board: Board2048) -> tuple[str, float]:
     return best_dir, best_score
 
 
+def make_near_full_board(rng: random.Random) -> Board2048:
+    """Synthesize a board with ≤2 empty cells for overflow-alert yes labels."""
+    vals = [2, 4, 8, 16, 32, 64]
+    grid = [[rng.choice(vals) for _ in range(4)] for _ in range(4)]
+    n_empty = rng.randint(0, 2)
+    cells = [(r, c) for r in range(4) for c in range(4)]
+    for r, c in rng.sample(cells, n_empty):
+        grid[r][c] = 0
+    return Board2048(grid=grid)
+
+
+def _overflow_alert(
+    state: dict[str, Any],
+    is_danger: bool,
+    *,
+    extra_meta: dict[str, Any] | None = None,
+) -> DistillSample:
+    criteria, alias_map = alias_criteria(
+        {
+            "yes": "Grid almost full (danger of game over)",
+            "no": "Grid has sufficient space",
+        }
+    )
+    key_to_alias = {v: k for k, v in alias_map.items()}
+    lbl_key = "yes" if is_danger else "no"
+    meta: dict[str, Any] = {"gym": "game2048", "schema": "noul"}
+    if extra_meta:
+        meta.update(extra_meta)
+    return DistillSample(
+        task="game2048.overflow_alert",
+        state=state,
+        instructions="Is the 2048 board currently in immediate danger of overflowing and game over?",
+        criteria=criteria,
+        label_alias=key_to_alias[lbl_key],
+        label_key=lbl_key,
+        meta=meta,
+    )
+
+
 def generate_2048_samples(
     n_samples: int,
     *,
     seed: int = 42,
     hard: bool = False,
 ) -> list[DistillSample]:
-    """Generate synthetic supervised choice/noul/score samples for 2048."""
+    """2048 distill with balanced overflow alerts; no empty-count leak in state."""
     rng = random.Random(seed)
     samples: list[DistillSample] = []
+    alert_yes = 0
+    alert_no = 0
+    yes_budget = max(1, n_samples // 5)
 
     while len(samples) < n_samples:
+        # Top-up near-full boards for overflow-yes (no numeric empty_count in state)
+        if alert_yes < yes_budget and alert_yes <= alert_no and rng.random() < 0.4:
+            board = make_near_full_board(rng)
+            from systemone_lite.synth.augmentation import apply_d4_transform
+
+            rot_k = rng.randint(0, 3)
+            flip_h = rng.random() < 0.5
+            aug_grid, _ = apply_d4_transform(board.grid, None, rot_k=rot_k, flip_h=flip_h)
+            aug_board = Board2048(grid=aug_grid)
+            empty_count = len(aug_board.empty_cells)
+            state = {
+                "grid_map": f"\n{aug_board.render_ascii()}\n",
+                "legend": "Numbers represent tile values; '.' represents an empty cell.",
+                "highest_tile": aug_board.max_tile,
+            }
+            samples.append(
+                _overflow_alert(
+                    state,
+                    empty_count <= 2,
+                    extra_meta={
+                        "overflow_synth": True,
+                        "aug_rot_k": rot_k,
+                        "aug_flip_h": flip_h,
+                        "empty_cells_count": empty_count,
+                    },
+                )
+            )
+            if empty_count <= 2:
+                alert_yes += 1
+            else:
+                alert_no += 1
+            continue
+
         board = Board2048([[0] * 4 for _ in range(4)])
         board.spawn_tile(rng)
         board.spawn_tile(rng)
@@ -180,32 +255,32 @@ def generate_2048_samples(
                 break
 
             best_d, _ = best_move_2048(board)
-            # Apply D4 augmentation (rotations & horizontal flip)
             from systemone_lite.synth.augmentation import apply_d4_transform
+
             rot_k = rng.randint(0, 3)
             flip_h = rng.random() < 0.5
-            aug_grid, aug_best_d = apply_d4_transform(board.grid, best_d, rot_k=rot_k, flip_h=flip_h)
-
-            # Build ASCII from augmented grid
+            aug_grid, aug_best_d = apply_d4_transform(
+                board.grid, best_d, rot_k=rot_k, flip_h=flip_h
+            )
             aug_board = Board2048(grid=aug_grid)
-            grid_ascii = f"\n{aug_board.render_ascii()}\n"
             empty_count = len(aug_board.empty_cells)
 
+            # Keep empty count out of model-visible state (was a direct alert leak)
             state = {
-                "grid_map": grid_ascii,
+                "grid_map": f"\n{aug_board.render_ascii()}\n",
                 "legend": "Numbers represent tile values; '.' represents an empty cell.",
-                "empty_cells_count": empty_count,
                 "highest_tile": aug_board.max_tile,
             }
-
-            # 1. Choice sample: strictly bare directional options
             options = {d: f"Slide {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"]}
 
-            if rng.random() < 0.75:
+            if rng.random() < 0.75 and aug_best_d is not None:
                 s = choice_sample(
                     task="game2048.slide",
                     state=state,
-                    instructions="Inspect the 4x4 2048 grid. Choose the slide direction: UP, DOWN, LEFT, RIGHT.",
+                    instructions=(
+                        "Inspect the 4x4 2048 grid. "
+                        "Choose the slide direction: UP, DOWN, LEFT, RIGHT."
+                    ),
                     options=options,
                     label_key=aug_best_d,
                     meta={
@@ -213,31 +288,38 @@ def generate_2048_samples(
                         "max_tile": aug_board.max_tile,
                         "aug_rot_k": rot_k,
                         "aug_flip_h": flip_h,
+                        "empty_cells_count": empty_count,
                     },
                     rng=rng,
                     hard=hard,
                 )
                 samples.append(s)
 
-            # 2. Noul sample: overflow / emergency alert
-            if len(samples) < n_samples and rng.random() < 0.35:
-                is_danger = empty_count <= 2
-                criteria, alias_map = alias_criteria({"yes": "Grid almost full (danger of game over)", "no": "Grid has sufficient space"})
-                key_to_alias = {v: k for k, v in alias_map.items()}
-                lbl_key = "yes" if is_danger else "no"
+            is_danger = empty_count <= 2
+            if is_danger and alert_yes <= alert_no and len(samples) < n_samples:
                 samples.append(
-                    DistillSample(
-                        task="game2048.overflow_alert",
-                        state=state,
-                        instructions="Is the 2048 board currently in immediate danger of overflowing and game over?",
-                        criteria=criteria,
-                        label_alias=key_to_alias[lbl_key],
-                        label_key=lbl_key,
-                        meta={"gym": "game2048", "schema": "noul"},
+                    _overflow_alert(
+                        state,
+                        True,
+                        extra_meta={"empty_cells_count": empty_count},
                     )
                 )
+                alert_yes += 1
+            elif (
+                (not is_danger)
+                and alert_no <= alert_yes
+                and len(samples) < n_samples
+                and rng.random() < 0.35
+            ):
+                samples.append(
+                    _overflow_alert(
+                        state,
+                        False,
+                        extra_meta={"empty_cells_count": empty_count},
+                    )
+                )
+                alert_no += 1
 
-            # Advance game
             nxt_board = legal[best_d]
             nxt_board.spawn_tile(rng)
             board = nxt_board

@@ -1,0 +1,60 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "data": "/home/fritzprix/my_works/systemone-lite/data/general_eval_hard.jsonl",
+  "n": 5400,
+  "accuracy": 0.43018518518518517,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "debate_judge": {
+      "n": 1800,
+      "accuracy": 0.4066666666666667
+    },
+    "resource_allocator": {
+      "n": 1800,
+      "accuracy": 0.3983333333333333
+    },
+    "ticket_dungeon": {
+      "n": 1800,
+      "accuracy": 0.4855555555555556
+    }
+  },
+  "per_task": {
+    "alloc.can_fund_all": {
+      "n": 600,
+      "accuracy": 0.5533333333333333
+    },
+    "alloc.fund_next": {
+      "n": 600,
+      "accuracy": 0.25833333333333336
+    },
+    "alloc.pressure": {
+      "n": 600,
+      "accuracy": 0.38333333333333336
+    },
+    "debate.confidence": {
+      "n": 600,
+      "accuracy": 0.25833333333333336
+    },
+    "debate.enough_evidence": {
+      "n": 600,
+      "accuracy": 0.4483333333333333
+    },
+    "debate.winner": {
+      "n": 600,
+      "accuracy": 0.5133333333333333
+    },
+    "ticket.needs_human": {
+      "n": 600,
+      "accuracy": 0.6216666666666667
+    },
+    "ticket.route": {
+      "n": 600,
+      "accuracy": 0.45
+    },
+    "ticket.urgency": {
+      "n": 600,
+      "accuracy": 0.385
+    }
+  }
+}

@@ -1,0 +1,172 @@
+{
+  "rows": [
+    {
+      "name": "mixed-sft",
+      "temperature": null,
+      "acc_pct": 45.89,
+      "ece": 0.2211,
+      "tiers_acc": {
+        "easy": 64.6,
+        "standard": 45.8,
+        "hard": 37.8
+      },
+      "axes": {
+        "intelligence": 46.1,
+        "calibration": 55.8,
+        "speed": 90.5,
+        "cost": 76.1
+      },
+      "jevbench_score": 64.9,
+      "hypothetical_rank": 21,
+      "n_ranked_board": 38,
+      "latency_p50_ms": 13.53,
+      "caveats": [
+        "Not an official JevBench submission / protocol run",
+        "Missing judge tier; intelligence renormalized over easy/standard/hard only",
+        "Calibration = ECE-only (no probability-fidelity / TVD term)",
+        "Speed from local in-process 231 items, not serial 242 standard+judge over network",
+        "Cost borrowed kev-0.5B size-class estimate $0.0063/1k decisions"
+      ]
+    },
+    {
+      "name": "spatial-v2b T=1.0",
+      "temperature": null,
+      "acc_pct": 43.72,
+      "ece": 0.3058,
+      "tiers_acc": {
+        "easy": 62.5,
+        "standard": 48.6,
+        "hard": 32.4
+      },
+      "axes": {
+        "intelligence": 44.6,
+        "calibration": 38.8,
+        "speed": 90.6,
+        "cost": 76.1
+      },
+      "jevbench_score": 58.8,
+      "hypothetical_rank": 34,
+      "n_ranked_board": 38,
+      "latency_p50_ms": 13.7,
+      "caveats": [
+        "Not an official JevBench submission / protocol run",
+        "Missing judge tier; intelligence renormalized over easy/standard/hard only",
+        "Calibration = ECE-only (no probability-fidelity / TVD term)",
+        "Speed from local in-process 231 items, not serial 242 standard+judge over network",
+        "Cost borrowed kev-0.5B size-class estimate $0.0063/1k decisions"
+      ]
+    },
+    {
+      "name": "spatial-v2b T=1.6",
+      "temperature": 1.6,
+      "acc_pct": 43.72,
+      "ece": 0.2169,
+      "tiers_acc": {
+        "easy": 62.5,
+        "standard": 48.6,
+        "hard": 32.4
+      },
+      "axes": {
+        "intelligence": 44.6,
+        "calibration": 56.6,
+        "speed": 90.5,
+        "cost": 76.1
+      },
+      "jevbench_score": 64.6,
+      "hypothetical_rank": 22,
+      "n_ranked_board": 38,
+      "latency_p50_ms": 13.38,
+      "caveats": [
+        "Not an official JevBench submission / protocol run",
+        "Missing judge tier; intelligence renormalized over easy/standard/hard only",
+        "Calibration = ECE-only (no probability-fidelity / TVD term)",
+        "Speed from local in-process 231 items, not serial 242 standard+judge over network",
+        "Cost borrowed kev-0.5B size-class estimate $0.0063/1k decisions"
+      ]
+    },
+    {
+      "name": "spatial-v2 T=1.0",
+      "temperature": null,
+      "acc_pct": 42.86,
+      "ece": 0.3584,
+      "tiers_acc": {
+        "easy": 64.6,
+        "standard": 44.4,
+        "hard": 32.4
+      },
+      "axes": {
+        "intelligence": 43.4,
+        "calibration": 28.3,
+        "speed": 90.5,
+        "cost": 76.1
+      },
+      "jevbench_score": 53.9,
+      "hypothetical_rank": 37,
+      "n_ranked_board": 38,
+      "latency_p50_ms": 12.94,
+      "caveats": [
+        "Not an official JevBench submission / protocol run",
+        "Missing judge tier; intelligence renormalized over easy/standard/hard only",
+        "Calibration = ECE-only (no probability-fidelity / TVD term)",
+        "Speed from local in-process 231 items, not serial 242 standard+judge over network",
+        "Cost borrowed kev-0.5B size-class estimate $0.0063/1k decisions"
+      ]
+    },
+    {
+      "name": "spatial-v2 T=1.6",
+      "temperature": 1.6,
+      "acc_pct": 42.86,
+      "ece": 0.2769,
+      "tiers_acc": {
+        "easy": 64.6,
+        "standard": 44.4,
+        "hard": 32.4
+      },
+      "axes": {
+        "intelligence": 43.4,
+        "calibration": 44.6,
+        "speed": 90.5,
+        "cost": 76.1
+      },
+      "jevbench_score": 60.4,
+      "hypothetical_rank": 34,
+      "n_ranked_board": 38,
+      "latency_p50_ms": 12.91,
+      "caveats": [
+        "Not an official JevBench submission / protocol run",
+        "Missing judge tier; intelligence renormalized over easy/standard/hard only",
+        "Calibration = ECE-only (no probability-fidelity / TVD term)",
+        "Speed from local in-process 231 items, not serial 242 standard+judge over network",
+        "Cost borrowed kev-0.5B size-class estimate $0.0063/1k decisions"
+      ]
+    },
+    {
+      "name": "qwen-base",
+      "temperature": null,
+      "acc_pct": 39.39,
+      "ece": 0.2837,
+      "tiers_acc": {
+        "easy": 54.2,
+        "standard": 40.3,
+        "hard": 32.4
+      },
+      "axes": {
+        "intelligence": 39.7,
+        "calibration": 43.3,
+        "speed": 90.6,
+        "cost": 76.1
+      },
+      "jevbench_score": 58.7,
+      "hypothetical_rank": 34,
+      "n_ranked_board": 38,
+      "latency_p50_ms": 13.6,
+      "caveats": [
+        "Not an official JevBench submission / protocol run",
+        "Missing judge tier; intelligence renormalized over easy/standard/hard only",
+        "Calibration = ECE-only (no probability-fidelity / TVD term)",
+        "Speed from local in-process 231 items, not serial 242 standard+judge over network",
+        "Cost borrowed kev-0.5B size-class estimate $0.0063/1k decisions"
+      ]
+    }
+  ]
+}
