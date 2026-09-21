@@ -99,8 +99,15 @@ def best_move_connect4(
     board: Connect4Board,
     player: str,
     rng: random.Random | None = None,
+    *,
+    column_bias: dict[int, float] | None = None,
 ) -> int:
-    """Fast tactical move selector (win > block > soft center with noise)."""
+    """Tactical move selector (win > block > safe free move).
+
+    Free moves prefer under-filled columns when ``column_bias`` maps
+    0-based col → weight (higher = more desired). Default is uniform among
+    non-blunder legal columns (no soft center prior).
+    """
     legal = board.get_legal_columns()
     if not legal:
         return 3
@@ -116,21 +123,30 @@ def best_move_connect4(
     if block_col is not None and block_col in legal:
         return block_col
 
-    scored_moves: list[tuple[int, float]] = []
+    safe: list[int] = []
     for c in legal:
         test_board = Connect4Board([list(row) for row in board.grid], board.turn)
         r = test_board.drop_piece(c, player)
+        # Avoid moves that gift an immediate win to the opponent
         if r is not None and r > 0 and test_board.is_winning_move(c, opp):
-            blunder_penalty = -1000.0
-        else:
-            blunder_penalty = 0.0
-        # Soft center preference + noise so edges appear in distill
-        center_bonus = (3 - abs(3 - c)) * 3.0
-        noise = rng.uniform(0.0, 12.0)
-        scored_moves.append((c, center_bonus + blunder_penalty + noise))
+            continue
+        safe.append(c)
+    if not safe:
+        safe = list(legal)
 
-    scored_moves.sort(key=lambda x: x[1], reverse=True)
-    return scored_moves[0][0]
+    if column_bias:
+        weights = [max(1e-3, float(column_bias.get(c, 1.0))) for c in safe]
+        return rng.choices(safe, weights=weights, k=1)[0]
+    return rng.choice(safe)
+
+
+def _drop_column_weights(counts: dict[str, int]) -> dict[int, float]:
+    """Inverse-frequency weights for 0-based columns (keys are 1-based label strings)."""
+    weights: dict[int, float] = {}
+    for c in range(COLS):
+        n = counts.get(str(c + 1), 0)
+        weights[c] = 1.0 / (1.0 + n)
+    return weights
 
 
 def _threat_alert(
@@ -203,6 +219,48 @@ def generate_connect4_samples(
     alert_yes = 0
     alert_no = 0
     yes_budget = max(1, n_samples // 5)
+    drop_counts: dict[str, int] = {str(c + 1): 0 for c in range(COLS)}
+
+    def _maybe_add_drop(
+        *,
+        state: dict[str, Any],
+        label_1based: str,
+        to_move: str,
+        mirror_h: bool,
+        forced_block: bool = False,
+    ) -> None:
+        nonlocal samples
+        if len(samples) >= n_samples:
+            return
+        # Soft balance: skip free-drop samples that widen the majority gap too far
+        if not forced_block:
+            vals = list(drop_counts.values())
+            majority = max(vals) if vals else 0
+            minority = min(vals) if vals else 0
+            this = drop_counts.get(label_1based, 0)
+            if this > minority + max(40, n_samples // 80) and this >= majority:
+                return
+        options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
+        s = choice_sample(
+            task="connect4.drop",
+            state=state,
+            instructions=(
+                "Inspect the 7x6 Connect Four board. "
+                "Choose the column (1 to 7) to drop your disc."
+            ),
+            options=options,
+            label_key=label_1based,
+            meta={
+                "gym": "connect4",
+                "turn": to_move,
+                "aug_mirror_h": mirror_h,
+                **({"forced_block": True} if forced_block else {}),
+            },
+            rng=rng,
+            hard=hard,
+        )
+        samples.append(s)
+        drop_counts[label_1based] = drop_counts.get(label_1based, 0) + 1
 
     while len(samples) < n_samples:
         # Top-up explicit threat-yes (+ matching block drop)
@@ -230,27 +288,13 @@ def generate_connect4_samples(
                 )
             )
             alert_yes += 1
-            if len(samples) < n_samples:
-                options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
-                s = choice_sample(
-                    task="connect4.drop",
-                    state=state,
-                    instructions=(
-                        "Inspect the 7x6 Connect Four board. "
-                        "Choose the column (1 to 7) to drop your disc."
-                    ),
-                    options=options,
-                    label_key=str(aug_block),
-                    meta={
-                        "gym": "connect4",
-                        "turn": to_move,
-                        "aug_mirror_h": mirror_h,
-                        "forced_block": True,
-                    },
-                    rng=rng,
-                    hard=hard,
-                )
-                samples.append(s)
+            _maybe_add_drop(
+                state=state,
+                label_1based=str(aug_block),
+                to_move=to_move,
+                mirror_h=mirror_h,
+                forced_block=True,
+            )
             continue
 
         board = Connect4Board([["." for _ in range(COLS)] for _ in range(ROWS)], turn="R")
@@ -265,7 +309,12 @@ def generate_connect4_samples(
 
             curr_player = "R" if turn_idx % 2 == 0 else "Y"
             opp_player = "Y" if curr_player == "R" else "R"
-            best_col = best_move_connect4(board, curr_player, rng=rng)
+            best_col = best_move_connect4(
+                board,
+                curr_player,
+                rng=rng,
+                column_bias=_drop_column_weights(drop_counts),
+            )
 
             from systemone_lite.synth.augmentation import apply_connect4_mirror
 
@@ -277,7 +326,6 @@ def generate_connect4_samples(
                 aug_board = board
                 aug_best_col_1based = best_col + 1
 
-            options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
             state = {
                 "grid_map": f"\n{aug_board.render_ascii()}\n",
                 "turn": f"{'Red (R)' if curr_player == 'R' else 'Yellow (Y)'}",
@@ -285,24 +333,13 @@ def generate_connect4_samples(
             }
 
             if rng.random() < 0.70:
-                s = choice_sample(
-                    task="connect4.drop",
+                _maybe_add_drop(
                     state=state,
-                    instructions=(
-                        "Inspect the 7x6 Connect Four board. "
-                        "Choose the column (1 to 7) to drop your disc."
-                    ),
-                    options=options,
-                    label_key=str(aug_best_col_1based),
-                    meta={
-                        "gym": "connect4",
-                        "turn": curr_player,
-                        "aug_mirror_h": mirror_h,
-                    },
-                    rng=rng,
-                    hard=hard,
+                    label_1based=str(aug_best_col_1based),
+                    to_move=curr_player,
+                    mirror_h=mirror_h,
+                    forced_block=False,
                 )
-                samples.append(s)
 
             threat_col = aug_board.find_immediate_threat(opp_player)
             has_threat = threat_col is not None
