@@ -39,3 +39,4 @@ htmlcov/
 data/
 checkpoints/
 third_party/
+wandb/
