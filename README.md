@@ -1,231 +1,67 @@
 # systemone-lite
 
-Local approximation of the public TypeSafe **System One** JSON API
-(`POST /v1/systemone`), backed by a small causal LM.
+Local **System One–shaped** decision API: you send `state` + typed questions
+(`noul` / `choice` / `score`), and get back **one option letter (or yes/no/level)** —
+not free-form JSON.
 
-Not affiliated with [TypeSafe AI](https://typesafe.ai) or Jev. Not a production
-replacement.
+Built on `Qwen/Qwen2.5-0.5B-Instruct` with shared KV prefix + option-restricted
+softmax. Runs on a consumer GPU (figures below: RTX 3060).
 
-**Inference:** shared state prefix (KV cache) + batched per-question next-token
-scoring over **option token ids only** (softmax restricted to the question’s
-criteria / yes–no / score levels). No autoregressive JSON string generation.
+> Not affiliated with [TypeSafe AI](https://typesafe.ai) or Jev. Not a hosted product.
 
-**Default weights:** `Qwen/Qwen2.5-0.5B-Instruct`. Optional SFT checkpoints:
-- Phase 1 mixed (general + chess): [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)
-- Phase 2 spatial: local `checkpoints/systemone-spatial-v2` (gate PASS; HF publish TBD)
+---
 
-## Key Capabilities & Design Principles
+## Which weights should I use?
 
-* **Low-latency option scoring**: Shared KV prefix + batched next-token softmax over **option ids only** (not free-form JSON). Short payloads are tens of ms on RTX 3060; large states / many questions are slower — see [Measured results](#latency-in-process-no-http).
-* **Bare evaluation**: No keyword coaching (`RECOMMENDED`, `OPTIMAL`, …) or solver overrides when claiming competence. Alias order is shuffled on held-out choice tasks.
-* **2D spatial gyms**: Sokoban, 2048, GridWorld, Connect Four, Chess (`board_2d_map`) with synthetic distill for Phase 2.
+| Checkpoint | Hub | Use when |
+|---|---|---|
+| **Recommended — spatial-v2-s1** | [`dwidlee/systemone-lite-spatial-v2-s1`](https://huggingface.co/dwidlee/systemone-lite-spatial-v2-s1) | Best current all-rounder (text + spatial + cloze continue) |
+| Phase 1 mixed | [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b) | Text routing / ticket-style tasks only; best calibration |
+| Base | [`Qwen/Qwen2.5-0.5B-Instruct`](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) | Ablation / cold start |
 
-## Measured results
+Dataset for Phase 2 training/eval:
+[`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
+(**train 240 800 / test 4 700**, **0%** train∩test state overlap).
 
-All figures below are from this repo’s scripts. Reproduce paths are linked.
+---
 
-### API surface
+## Performance (recommended model)
 
-Compatible with the public System One **request/response shape**
-([TypeSafe API reference](https://docs.typesafe.ai/api.md)):
+**`spatial-v2-s1`** — continual SFT from spatial-v2 on the scrubbed Phase 2 mix
+(20 000 steps). Local benches only; **not** an official JevBench leaderboard row.
 
-- `POST /v1/systemone`
-- `state` + `questions` map: `noul` | `choice` | `score`
-- `answers` + `usage.input_tokens` / `usage.output_tokens`
-
-Intentionally different: model ids, accuracy/calibration, auth, and
-`confidence` formula `(p_max - 1/n)/(1 - 1/n)`.
-
-### Latency (in-process, no HTTP)
-
-Hardware: **NVIDIA RTX 3060** (12 GB). Model: `Qwen/Qwen2.5-0.5B-Instruct`.
-Warmup excluded.
-
-**Option scoring** = System One path (batched next-token logits; softmax over
-option token ids; prefix KV when ≥2 questions).  
-**AR JSON** = same weights, `model.generate` greedy multi-field JSON
-(full vocabulary; fixed `max_new_tokens` budget).
-
-Sources:
-[`benchmarks/latency_prefix_cache.json`](benchmarks/latency_prefix_cache.json)
-(option-only sweep),
-[`benchmarks/latency_vs_ar.json`](benchmarks/latency_vs_ar.json)
-(option vs AR).
-
-#### Option scoring (prefix KV)
-
-| Case | Questions | State chars | p50 (ms) |
-|---|---:|---:|---:|
-| short_1q | 1 | 73 | 10.7 |
-| short_3q | 3 | 73 | 24.4 |
-| short_8q | 8 | 73 | 39.0 |
-| short_13q | 13 | 73 | 58.4 |
-| long_3q | 3 | 6274 | 98.8 |
-| long_13q | 13 | 6274 | 145.0 |
-
-#### Option scoring vs AR JSON (same machine / weights)
-
-| Case | Option p50 (ms) | AR JSON p50 (ms) | AR / option |
-|---|---:|---:|---:|
-| short_3q | 26.2 | 1057 | 40.3× |
-| short_13q | 64.9 | 3482 | 53.7× |
-| long_3q | 107.6 | 1137 | 10.6× |
-| long_13q | 157.9 | 3613 | 22.9× |
-
-Notes: AR wall time is `generate()` only (no HTTP). In these runs AR often
-filled the `max_new_tokens` budget (no early EOS), so treat ratios as an upper
-bound on AR cost for that budget. Option scoring returns schema symbols by
-construction; AR may emit invalid JSON (not scored here).
-
-TypeSafe’s public materials describe Jev E2E latency roughly in the
-**70–500 ms** range (their cloud + network; not measured here). Not a controlled
-comparison to this local bench.
-
-```bash
-python scripts/bench_latency.py --warmup 3 --runs 15 \
-  --out benchmarks/latency_vs_ar.json
-```
-
-### Mixed SFT accuracy (option top-1)
-
-Cold start from `Qwen/Qwen2.5-0.5B-Instruct`. Train set:
-`data/mixed_train.jsonl` (43 200 rows) — ticket / alloc / debate / chess with
-**equal gym exposure** (10 800 each; chess upsampled from 4 500 move rows with
-`board_2d_map`). Recipe: 1 epoch, batch size 4, `--stratified`, 10 800 steps.
-Checkpoint: `checkpoints/systemone-mixed-sft` → published as
-[`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).
-
-Report: [`benchmarks/mixed_vs_base_report.json`](benchmarks/mixed_vs_base_report.json).  
-Write-up: [`docs/NOTE_MIXED_SFT_2026-09-20.md`](docs/NOTE_MIXED_SFT_2026-09-20.md).
-
-#### General held-out
-
-| Split | n | Base 0.5B | Mixed SFT | Δ |
-|---|---:|---:|---:|---:|
-| iid (`general_eval`) | 3600 | 0.439 | **0.781** | +0.343 |
-| hard (`general_eval_hard`) | 5400 | 0.427 | **0.733** | +0.307 |
-
-Selected iid (mixed): `ticket.route` 1.000, `ticket.urgency` 0.965,
-`ticket.needs_human` 0.985, `alloc.fund_next` 0.975, `debate.winner` 0.810.
-Weaker: `debate.enough_evidence` 0.550, `debate.confidence` 0.473.
-
-(Prior general-only SFT on the same splits: iid 0.679 / hard 0.652.)
-
-#### Chess move (2D board + shuffled options)
-
-Eval: `data/chess_eval_5k_2d.jsonl` (n=500). Options are letter-aliased and
-**order-shuffled**; raw FEN-only / fixed-order evals overstated base accuracy.
-
-| Checkpoint | Accuracy |
-|---|---:|
-| Base | 0.050 |
-| Mixed SFT | **0.236** |
-| Prior general-only SFT | 0.042 |
-| Prior chess-only SFT (FEN-era weights) | 0.028 |
-
-Mixed training raises chess above chance without collapsing general tasks.
-Absolute chess accuracy remains modest on this debiased harness.
-
-### Phase 2 spatial SFT (option top-1)
-
-Cold start from base on `data/phase2_train_200k.jsonl` (~204.8k; spatial + chess +
-general). Checkpoint: `checkpoints/systemone-spatial-v2` (51 200 steps).  
-**Gate: PASS.** Report: [`benchmarks/spatial_v2_report.json`](benchmarks/spatial_v2_report.json).  
-Postmortem: [`docs/NOTE_SPATIAL_V2_POSTMORTEM.md`](docs/NOTE_SPATIAL_V2_POSTMORTEM.md).
-
-Dataset (Hub): [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
-(train **240 800** / test **4 700** — spatial + chess + general + CA + word games +
-**nlp_cloze**; **0.00%** train∩test state_task overlap after 2026-09-22 scrub).
-Rebuild/audit before trusting new runs:
-`python scripts/audit_train_eval_overlap.py` · `python scripts/audit_phase2_distill.py`.
-#### Spatial held-out (bare + shuffled; n=500 / gym)
-
-| Gym | Base | Phase 1 mixed | **Spatial v2** | Δ vs P1 |
-|---|---:|---:|---:|---:|
-| Connect4 | 0.168 | 0.158 | **0.754** | +0.596 |
-| Sokoban | 0.336 | 0.174 | **0.506** | +0.332 |
-| 2048 | 0.308 | 0.188 | **0.502** | +0.314 |
-| GridWorld | 0.318 | 0.274 | **0.360** | +0.086 |
-| **Overall** | 0.283 | 0.199 | **0.531** | +0.332 |
-
-#### Anchors (same gate suite)
-
-| Bench | Phase 1 (published / re-run) | Spatial v2 |
-|---|---|---:|
-| Chess 2D shuffled (n=500) | ~0.24 / 0.09 | **0.22** (gate tol −0.03 vs published) |
-| General iid | ~0.78 | **0.91** |
-| General hard | ~0.73 | **0.87** |
-| Invariance (rotated/mirrored) | — | 0.55 (vs canonical 0.53) |
-
-Held-out top-1 ≠ long rollout skill. Bare demos:
-[`benchmarks/demos/`](benchmarks/demos/) (Base / Phase 1 / Phase 2 GIFs).  
-GridWorld remains the weakest spatial gym; post-gate synth fixes (spawn, alert
-balance, leaks) and symbol remapping landed **after** this checkpoint — see postmortem.
-A follow-on continual run (`systemone-spatial-v2b`) may still be in progress; do not
-treat unfinished mid-ckpts as the published Phase 2 result.
-
-### Continual v2→s1 (cloze + zero-leakage mix)
-
-Checkpoint: `checkpoints/systemone-spatial-v2-s1` (20 000 steps from `spatial-v2`) /
-HF [`dwidlee/systemone-lite-spatial-v2-s1`](https://huggingface.co/dwidlee/systemone-lite-spatial-v2-s1).  
-Local mix: train **240 800** / eval **4 700** (CA + word games + **nlp_cloze**; train∩eval **0.00%**).  
-Note: [`docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`](docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md).  
-Demos: [`benchmarks/demos/spatial_v2_s1/`](benchmarks/demos/spatial_v2_s1/).
-#### JevBench (local T=1.0, 231 tasks)
-
-| Model | Acc | ECE |
-|---|---:|---:|
-| Phase 1 mixed | 45.9% | **0.221** |
-| Spatial v2 | 42.9% | 0.358 |
-| **v2-s1 (cloze continue)** | **49.8%** | 0.307 |
-
-Report: [`benchmarks/jevbench_spatial_v2_s1.json`](benchmarks/jevbench_spatial_v2_s1.json).  
-Accuracy rose vs v2/P1; calibration (ECE) still trails Phase 1.
-## Resources
-
-| Resource | Link |
+| Bench | Result |
 |---|---|
-| Code | [github.com/fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) |
-| General dataset | [dwidlee/systemone-lite-general](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
-| Phase 2 dataset | [dwidlee/systemone-lite-phase2](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2) (240.8k/4.7k, **0%** train∩test) |
-| Phase 1 mixed SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
-| Phase 2 v2→s1 model | [dwidlee/systemone-lite-spatial-v2-s1](https://huggingface.co/dwidlee/systemone-lite-spatial-v2-s1) |
-| Base model | [Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) |
-| System One API (reference) | [docs.typesafe.ai/api.md](https://docs.typesafe.ai/api.md) |
-| Roadmap | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
-| Design notes | [`docs/PROPOSAL.md`](docs/PROPOSAL.md) |
-| Mixed SFT note | [`docs/NOTE_MIXED_SFT_2026-09-20.md`](docs/NOTE_MIXED_SFT_2026-09-20.md) |
-| Spatial v2 postmortem | [`docs/NOTE_SPATIAL_V2_POSTMORTEM.md`](docs/NOTE_SPATIAL_V2_POSTMORTEM.md) |
+| JevBench public subset (231 tasks, T=1.0) | **Acc 49.8%** · ECE 0.307 · p50 **12.6 ms** |
+| Phase 1 mixed (same JevBench harness) | Acc 45.9% · ECE **0.221** |
+| Spatial held-out (parent `spatial-v2`, bare+shuffled) | overall **0.53** top-1 across 4 gyms |
 
-```bash
-systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
+Latency (in-process option scoring, same machine class): short 1-question payloads
+~**10–30 ms**; large state / many questions ~**100–160 ms**. Option scoring is
+typically **10–50×** faster than greedy AR JSON on the same weights
+([`benchmarks/latency_vs_ar.json`](benchmarks/latency_vs_ar.json)).
 
-python - <<'PY'
-from datasets import load_dataset
-print(load_dataset("dwidlee/systemone-lite-general"))
-PY
-```
+Bare-face rollouts (GIFs): [`benchmarks/demos/spatial_v2_s1/`](benchmarks/demos/spatial_v2_s1/).
 
-## Why this exists
+Training / eval notes and older checkpoint tables live under [`docs/`](docs/) —
+start with [`NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`](docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md).
 
-- Run System One–shaped clients against a local server (no TypeSafe account)
-- Inspect batched option scoring and prefix KV behavior
-- Fine-tune on synthetic typed-decision gyms
+---
 
-## What it is / isn’t
+## Limits
 
-| Is | Isn’t |
-|---|---|
-| Approximation of System One **JSON contracts** | Clone of Jev weights, sampler, or RLCD |
-| Local FastAPI + Python client | Hosted SaaS |
-| Batched next-token + option-restricted softmax + prefix KV | Autoregressive JSON generation; BERT MLM |
-| MIT open source | Affiliated with or endorsed by TypeSafe |
+- **0.5B single-token policy** — strong at short typed decisions; weak at long
+  planning (Sokoban/chess rollouts still fail often even when held-out top-1 looks OK).
+- **Calibration** — v2-s1 accuracy beat Phase 1 on JevBench; ECE did **not**. Prefer
+  Phase 1 mixed if you care more about confidence quality.
+- **Not Jev** — different model, sampler, and `confidence` formula
+  `(p_max - 1/n)/(1 - 1/n)`.
+- **Eval hygiene** — always use the Hub **`test`** split (or rebuilt held-out JSONL).
+  Never score on `train`. Earlier mixes leaked train states into eval; current Hub
+  revision is scrubbed to **0%** overlap.
+- **Multi-token option keys** are not first-class (training uses letter aliases).
 
-## Requirements
-
-- Python 3.11+  
-- `torch`, `transformers`, `fastapi` (see `pyproject.toml`)  
-- GPU recommended (figures above: RTX 3060); CPU works, slower  
+---
 
 ## Install
 
@@ -235,42 +71,28 @@ cd systemone-lite
 pip install -e ".[dev]"
 ```
 
-## Quick start (local)
+Python 3.11+ · GPU recommended · see `pyproject.toml`.
 
-### 1) Unit tests (no model download)
+---
 
-```bash
-pytest
-```
+## Quick start
 
-### 2) Live demo (downloads ~0.5B weights on first run)
+### API server
 
 ```bash
-python scripts/demo_systemone.py
-```
+systemone-lite --model dwidlee/systemone-lite-spatial-v2-s1 --port 8000
 
-### 3) Local API server
-
-```bash
-systemone-lite --host 127.0.0.1 --port 8000
-# or: python -m systemone_lite.api
-```
-
-```bash
 curl -s http://127.0.0.1:8000/v1/systemone \
   -H 'Content-Type: application/json' \
   -d @tests/fixtures/official_example_request.json
 ```
 
-Point a System One–shaped client at `http://127.0.0.1:8000` for local experiments.
-
-## Python client
+### Python client
 
 ```python
 from systemone_lite import SystemOneClient, choice, noul, score
 
-# In-process (no HTTP), or: SystemOneClient(base_url="http://127.0.0.1:8000")
-client = SystemOneClient()
+client = SystemOneClient(model="dwidlee/systemone-lite-spatial-v2-s1")
 
 response = client.system_one(
     state="My card was charged twice.",
@@ -289,212 +111,61 @@ print(response.answers["needs_review"].noul)
 print(response.answers["urgency"].score)
 ```
 
-OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml)
+Wire shape matches the public System One contract
+([TypeSafe API reference](https://docs.typesafe.ai/api.md)): `POST /v1/systemone`
+with `noul` | `choice` | `score`. OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml).
 
-## General synthetic dataset (multi-gym)
-
-Non-chess typed decisions (ticket routing, budget allocation, debate judging).
-Rows are letter-alias `choice` samples for `scripts/chess_finetune.py`.
-
-Build notes:
-
-1. Round-robin gym episodes  
-2. Stratified train / iid-eval split by task  
-3. Separate hard eval (layout / paraphrase / option-subset shift)  
-4. Train with `--stratified` so batches mix gyms  
-
-HF mirror: **[`dwidlee/systemone-lite-general`](https://huggingface.co/datasets/dwidlee/systemone-lite-general)**  
-(`train` 32.4k / `test` 3.6k / `test_hard` 5.4k / `full` 36k).  
-Re-upload: `python scripts/upload_general_hf.py`.
+### Demos (optional)
 
 ```bash
-python scripts/build_general_distill.py \
-  --episodes 4000 --hard-episodes 600 --eval-frac 0.1 --seed 0
-
-wc -l data/general_train.jsonl data/general_eval.jsonl data/general_eval_hard.jsonl
+pytest                                          # no weights
+python scripts/demo_systemone.py                # downloads weights once
+python scripts/run_bare_demos.py --only spatial_v2_s1
 ```
 
-| Gym | Tasks |
+---
+
+## What this project is
+
+| Is | Isn’t |
 |---|---|
-| `ticket` | `ticket.route`, `ticket.needs_human`, `ticket.urgency` |
-| `alloc` | `alloc.fund_next`, `alloc.can_fund_all`, `alloc.pressure` |
-| `debate` | `debate.winner`, `debate.enough_evidence`, `debate.confidence` |
+| Local FastAPI + client approximating System One **JSON contracts** | Clone of Jev weights / RLCD / hosted SaaS |
+| Option-id softmax + prefix KV (low latency) | Autoregressive JSON generation |
+| Open MIT research / hobby stack | Production TypeSafe replacement |
 
-### Fine-tune (mixed: general + chess)
+**Why it exists:** run System One–shaped clients offline, inspect option scoring,
+and fine-tune on synthetic typed-decision gyms (tickets, budgets, debates, 2D maps,
+cloze).
 
-```bash
-# Refresh chess JSONL with board_2d_map (keeps Stockfish labels)
-python scripts/chess_distill_dataset.py \
-  --refresh-file data/chess_train_5k.jsonl \
-  --out data/chess_train_5k_2d.jsonl
+---
 
-python scripts/build_mixed_distill.py \
-  --general data/general_train.jsonl \
-  --chess data/chess_train_5k_2d.jsonl \
-  --out data/mixed_train.jsonl \
-  --chess-target 10800
-
-python scripts/chess_finetune.py \
-  --data data/mixed_train.jsonl \
-  --out checkpoints/systemone-mixed-sft \
-  --model Qwen/Qwen2.5-0.5B-Instruct \
-  --epochs 1 --batch-size 4 --tasks all --stratified
-
-python scripts/general_eval.py \
-  --data data/general_eval.jsonl \
-  --model checkpoints/systemone-mixed-sft \
-  --out benchmarks/mixed_sft_general_iid.json
-
-python scripts/chess_eval.py \
-  --data data/chess_eval_5k_2d.jsonl \
-  --model checkpoints/systemone-mixed-sft --task move --limit 500
-
-python scripts/upload_model_hf.py --dir checkpoints/systemone-mixed-sft
-systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
-```
-
-Numbers: [Measured results](#mixed-sft-accuracy-option-top-1).
-
-### Phase 2 on Google Colab (T4)
-
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/fritzprix/systemone-lite/blob/main/notebooks/phase2_spatial_training_colab.ipynb)
-
-Notebook: [`notebooks/phase2_spatial_training_colab.ipynb`](notebooks/phase2_spatial_training_colab.ipynb).
-
-**Dataset is prebuilt** on the Hub:
-[`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
-(228 800 train / 4 300 test; includes CA + word-game diversity). Colab only downloads JSONL and trains.
+## Train / rebuild (optional)
 
 ```bash
-# Rebuild spatial core + optional diversity merge, then re-upload:
+# Phase 2 mix (spatial + chess + general + CA + word + cloze)
 python scripts/build_phase2_distill.py
 python scripts/build_synth_diversity.py --merge-into-phase2
+python scripts/audit_train_eval_overlap.py   # must be 0%
 python scripts/upload_phase2_hf.py
-```
-
-- Default **smoke** mode: 20 000-row subset, batch 4, `max_length=768`.
-- **full** mode: entire train split (~51 200 steps) — use Drive + a long session.
-
-## Chess fine-tuning (Stockfish distill)
-
-Chess rows use `board_2d_map` (labeled 8×8 ASCII), not FEN alone. Prefer the
-**mixed** checkpoint above for joint general+chess weights. A chess-only local
-run is still useful for ablation:
-
-```bash
-# Ubuntu: sudo apt install stockfish
-# or:     python scripts/download_stockfish.py
-
-pip install -e ".[chess]"
-
-python scripts/chess_distill_dataset.py --positions 500 --movetime-ms 40
 
 python scripts/chess_finetune.py \
-  --data data/chess_distill.jsonl \
-  --out checkpoints/chess-sft \
-  --epochs 2 --batch-size 2 --max-steps 200
-
-python scripts/chess_eval.py --data data/chess_eval_5k_2d.jsonl \
-  --model checkpoints/chess-sft --task move --limit 500
+  --data data/phase2_train_200k.jsonl \
+  --out checkpoints/systemone-spatial-v2-s1 \
+  --model checkpoints/systemone-spatial-v2 \
+  --epochs 1 --batch-size 4 --tasks all --stratified --max-steps 20000
 ```
 
-```bash
-systemone-lite --model checkpoints/chess-sft --port 8000
-```
+Colab notebook: [`notebooks/phase2_spatial_training_colab.ipynb`](notebooks/phase2_spatial_training_colab.ipynb).
 
-Labels: Stockfish when available (`/usr/games/stockfish` on Ubuntu), else a
-tactical heuristic. Mixed vs base numbers:
-[Measured results](#chess-move-2d-board--shuffled-options).
+Roadmap & research logs: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
-## Interactive Demos & Dry-Runs
-
-> **Bare-face Base / Phase 1 / Phase 2**: [`benchmarks/demos/README.md`](benchmarks/demos/README.md)
-> and [`bare_face_report.json`](benchmarks/demos/bare_face_report.json). No tactical keyword
-> hints; demos do not replace model actions with BFS / `best_move_*`.
-
-System One Lite provides terminal-based interactive environments with live telemetry, ANSI rendering, and `--stub` dry-run modes (which run instantly on CPU without downloading weights):
-
-### 1. Multi-Step Chess Player (`chess_multistep_demo.py`)
-Two-stage System 1 decision pipeline (Stage 1 Piece Selection → Stage 2 Destination Selection):
-```bash
-# Live interactive terminal demo (real weights)
-python scripts/chess_multistep_demo.py --max-plies 20
-
-# Instant dry-run (no GPU / no weights download)
-python scripts/chess_multistep_demo.py --stub
-```
-
-## Spatial 2D Game Demos & Synthetic Dataset Engine
-
-In addition to Chess, System One Lite includes full-fledged 2D spatial text-map environments with real-time heuristic/BFS solvers and instant `--stub` execution:
-
-### 1. Sokoban (`sokoban_demo.py`)
-Warehouse box-pushing puzzle with real-time deadlock detection:
-```bash
-python scripts/sokoban_demo.py --stub
-```
-
-### 2. 2048 (`game2048_demo.py` / `2048_demo.py`)
-4x4 sliding tile puzzle with sub-10ms corner & monotonicity reflexes:
-```bash
-python scripts/game2048_demo.py --stub
-```
-
-### 3. GridWorld Hazards (`gridworld_demo.py`)
-Procedural maze navigation with deadly lava/spike trap avoidance:
-```bash
-python scripts/gridworld_demo.py --stub
-```
-
-### 4. Connect Four (`connect4_demo.py`)
-7-column vertical gravity board with instant 4-in-a-row threat defense:
-```bash
-python scripts/connect4_demo.py --stub
-```
-
-### 5. Multi-Step Chess (`chess_multistep_demo.py`)
-Two-stage System 1 decision pipeline: Stage 1 (Piece Selection) → Stage 2 (Destination Selection):
-```bash
-python scripts/chess_multistep_demo.py --stub --max-plies 10
-```
-
-### Synthetic Dataset Synthesis (`build_spatial_distill.py`)
-Generate supervised spatial datasets across all 4 games:
-```bash
-python scripts/build_spatial_distill.py \
-  --games sokoban,game2048,gridworld,connect4 \
-  --samples-per-game 500 \
-  --out data/spatial_distill.jsonl
-```
-
-## Project layout
-
-```text
-src/systemone_lite/   # schema, prompt, infer (prefix cache), API, client, synth/
-tests/
-scripts/              # demo, latency, train/eval, HF upload
-benchmarks/           # latency + held-out JSON evaluations
-openapi/
-docs/PROPOSAL.md
-```
-
-## Status
-
-Toy project. **Published** HF weights are Phase 1 **mixed** SFT (general + chess
-`board_2d_map`): [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b).  
-Phase 2 spatial SFT (`checkpoints/systemone-spatial-v2`) **passes** the local gate
-([report](benchmarks/spatial_v2_report.json)); HF model upload TBD. Next core work:
-synth diversity ([#7](https://github.com/fritzprix/systemone-lite/issues/7)) —
-see [`docs/ROADMAP.md`](docs/ROADMAP.md).
-
-Limitations: multi-token option keys; modest debiased chess; GridWorld weakest
-among spatial gyms; held-out ≠ long self-play; no ECE curves yet.
+---
 
 ## License
 
 MIT
 
-## Acknowledgments / disclaimer
+## Acknowledgments
 
 System One / Jev concepts and public API docs belong to their respective owners
 (TypeSafe AI). This repository is an independent, unofficial approximation for
