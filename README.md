@@ -187,8 +187,9 @@ Accuracy rose vs v2/P1; calibration (ECE) still trails Phase 1.
 |---|---|
 | Code | [github.com/fritzprix/systemone-lite](https://github.com/fritzprix/systemone-lite) |
 | General dataset | [dwidlee/systemone-lite-general](https://huggingface.co/datasets/dwidlee/systemone-lite-general) |
-| Phase 2 dataset | [dwidlee/systemone-lite-phase2](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2) |
+| Phase 2 dataset | [dwidlee/systemone-lite-phase2](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2) (240.8k/4.7k, **0%** train∩test) |
 | Phase 1 mixed SFT model | [dwidlee/systemone-lite-0.5b](https://huggingface.co/dwidlee/systemone-lite-0.5b) |
+| Phase 2 v2→s1 model | [dwidlee/systemone-lite-spatial-v2-s1](https://huggingface.co/dwidlee/systemone-lite-spatial-v2-s1) |
 | Base model | [Qwen/Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) |
 | System One API (reference) | [docs.typesafe.ai/api.md](https://docs.typesafe.ai/api.md) |
 | Roadmap | [`docs/ROADMAP.md`](docs/ROADMAP.md) |
