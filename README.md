@@ -8,7 +8,7 @@ option tokens only — not by generating JSON prose.
 
 - **API:** `POST /v1/systemone` (same request/response shape as the public
   [System One contract](https://docs.typesafe.ai/api.md))
-- **Model:** [`dwidlee/systemone-lite-spatial-v2-s1`](https://huggingface.co/dwidlee/systemone-lite-spatial-v2-s1)
+- **Model:** [`dwidlee/systemone-lite-0.5b`](https://huggingface.co/dwidlee/systemone-lite-0.5b)
   (fine-tuned from `Qwen/Qwen2.5-0.5B-Instruct`)
 - **Hardware:** consumer GPU friendly (latency numbers below: RTX 3060)
 
@@ -34,7 +34,7 @@ Python 3.11+ · GPU recommended.
 ### Server
 
 ```bash
-systemone-lite --model dwidlee/systemone-lite-spatial-v2-s1 --port 8000
+systemone-lite --model dwidlee/systemone-lite-0.5b --port 8000
 
 curl -s http://127.0.0.1:8000/v1/systemone \
   -H 'Content-Type: application/json' \
@@ -46,7 +46,7 @@ curl -s http://127.0.0.1:8000/v1/systemone \
 ```python
 from systemone_lite import SystemOneClient, choice, noul, score
 
-client = SystemOneClient(model="dwidlee/systemone-lite-spatial-v2-s1")
+client = SystemOneClient(model="dwidlee/systemone-lite-0.5b")
 
 response = client.system_one(
     state="My card was charged twice.",
@@ -71,7 +71,8 @@ OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml).
 
 ## How good is it?
 
-Published weights, **local** measurements (not an official leaderboard submission).
+Published weights (`dwidlee/systemone-lite-0.5b`), **local** measurements
+(not an official leaderboard submission).
 
 | What | Number |
 |---|---|
@@ -79,6 +80,8 @@ Published weights, **local** measurements (not an official leaderboard submissio
 | Short 1-question payloads | typically **~10–30 ms** |
 | Large state / many questions | typically **~100–160 ms** |
 | vs greedy AR JSON (same weights) | roughly **10–50×** faster option scoring |
+
+Uniform-random on this set is ~**32%** (many 4–5-way items), not 50%.
 
 Example rollouts (illustration only): [`benchmarks/demos/spatial_v2_s1/`](benchmarks/demos/spatial_v2_s1/).
 
@@ -114,7 +117,14 @@ pytest
 python scripts/demo_systemone.py
 ```
 
-Retrain / rebuild docs and research notes: [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Publish weights to the **stable** Hub id only:
+
+```bash
+python scripts/upload_model_hf.py --dir checkpoints/<your-run>
+# → always dwidlee/systemone-lite-0.5b
+```
+
+Retrain / rebuild docs: [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ---
 
