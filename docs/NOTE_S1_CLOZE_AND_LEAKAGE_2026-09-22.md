@@ -63,4 +63,4 @@ Prioritize **S1-shaped** data (alerts / legal / recovery + stronger text share).
 
 - Not an official JevBench leaderboard submission.
 - Held-out top-1 ≠ long rollout skill (demos still fail GridWorld/Sokoban clear).
-- Hub phase2 dataset may lag local 240.8k mix until re-upload.
+- Hub mirrors (2026-09-22): dataset `dwidlee/systemone-lite-phase2` (240 800 / 4 700, zero-leakage card) and model `dwidlee/systemone-lite-spatial-v2-s1`.

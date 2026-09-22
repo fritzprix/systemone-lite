@@ -134,10 +134,10 @@ general). Checkpoint: `checkpoints/systemone-spatial-v2` (51 200 steps).
 Postmortem: [`docs/NOTE_SPATIAL_V2_POSTMORTEM.md`](docs/NOTE_SPATIAL_V2_POSTMORTEM.md).
 
 Dataset (Hub): [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
-(train **228 800** / test **4 300** — spatial + chess + general + CA + word games;
-includes symbol remapping on GridWorld/Sokoban). Rebuild/audit before trusting new runs:
-`python scripts/audit_phase2_distill.py`.
-
+(train **240 800** / test **4 700** — spatial + chess + general + CA + word games +
+**nlp_cloze**; **0.00%** train∩test state_task overlap after 2026-09-22 scrub).
+Rebuild/audit before trusting new runs:
+`python scripts/audit_train_eval_overlap.py` · `python scripts/audit_phase2_distill.py`.
 #### Spatial held-out (bare + shuffled; n=500 / gym)
 
 | Gym | Base | Phase 1 mixed | **Spatial v2** | Δ vs P1 |
@@ -166,11 +166,11 @@ treat unfinished mid-ckpts as the published Phase 2 result.
 
 ### Continual v2→s1 (cloze + zero-leakage mix)
 
-Checkpoint: `checkpoints/systemone-spatial-v2-s1` (20 000 steps from `spatial-v2`).  
+Checkpoint: `checkpoints/systemone-spatial-v2-s1` (20 000 steps from `spatial-v2`) /
+HF [`dwidlee/systemone-lite-spatial-v2-s1`](https://huggingface.co/dwidlee/systemone-lite-spatial-v2-s1).  
 Local mix: train **240 800** / eval **4 700** (CA + word games + **nlp_cloze**; train∩eval **0.00%**).  
 Note: [`docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`](docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md).  
 Demos: [`benchmarks/demos/spatial_v2_s1/`](benchmarks/demos/spatial_v2_s1/).
-
 #### JevBench (local T=1.0, 231 tasks)
 
 | Model | Acc | ECE |
