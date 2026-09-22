@@ -15,7 +15,24 @@ Phase 6 (aspirational; early synth substrate = #7).
 Measured Phase 1 note: [`NOTE_MIXED_SFT_2026-09-20.md`](NOTE_MIXED_SFT_2026-09-20.md).
 Phase 2 v2 postmortem: [`NOTE_SPATIAL_V2_POSTMORTEM.md`](NOTE_SPATIAL_V2_POSTMORTEM.md).
 Research log (2026-09-21): [`NOTE_RESEARCH_LOG_2026-09-21.md`](NOTE_RESEARCH_LOG_2026-09-21.md) — gate, v2b, JevBench, temp scaling.
+S1 cloze + zero-leakage (2026-09-22): [`NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`](NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md).
 Bare-face demos: [`benchmarks/demos/README.md`](../benchmarks/demos/README.md).
+
+---
+
+## Strategic order (updated 2026-09-22)
+
+1. **Mainline — S1-optimized data + SFT**  
+   Zero-contamination eval; language anchors (cloze / ticket / alloc / debate); spatial tasks skewed toward **instant** judgments (alerts, legal, recovery), not long optimal search as the primary claim.
+2. **Sidekick — S2 / rollout RL**  
+   Self-play DPO/GRPO (Phase 3) after an S1 mix is solid. Rollouts improve a **single-token policy from outcomes**; they do not add CoT/search at inference.
+
+```mermaid
+flowchart LR
+    Hyg["Zero-leak eval + cloze"] --> S1["S1 mix SFT"]
+    S1 --> Gate["Held-out + JevBench"]
+    Gate --> Side["Phase 3 rollout RL<br/>sidekick"]
+```
 
 ---
 
@@ -31,14 +48,16 @@ Bare-face demos: [`benchmarks/demos/README.md`](../benchmarks/demos/README.md).
 | Spatial gyms + chess | Path / push / merge / gravity / piece geometry | Phase 2 (#2); symbol remap already on GridWorld/Sokoban |
 | **CA / Life-style** | Local update rules; **`n` = difficulty knob** | Adaptive/`frontier` sampling so signal does not die at large `n` |
 | **Word / language-rule games** | Anchor linguistic rule-following | ~10–20% mix; closed options; not MMLU dump |
+| **NLP cloze (WikiText)** | Real-context masked LM → alias-CE | Doc-disjoint train/test; expands beyond tiny word banks |
 | Fairy / executable DSL | Phase 6 scaffold | After CA+word land; keep builder hooks ready |
 
 **Deliverables:**
 
 - [x] CA gym synth + choice probes (cell/patch/summary); bare criteria; exact simulator labels — `synth/cellular_automata.py`
 - [x] Word-game synth (anagram / constrained rewrite / definition choice / etc.) — `synth/word_games.py`
-- [x] Builder caps + `audit_phase2_distill` extensions — `scripts/build_synth_diversity.py` (default 12k+12k; optional `--merge-into-phase2`)
-- [ ] Held-out eval splits in main phase2 gate; document mix ratios in report JSON after first train
+- [x] NLP cloze synth (WikiText-2, document-disjoint train/eval) — `synth/nlp_cloze.py`
+- [x] Builder caps + `audit_phase2_distill` extensions — `scripts/build_synth_diversity.py` (default 12k+12k+12k; optional `--merge-into-phase2`)
+- [x] Held-out eval splits (vocab/topic/state rejection); `scripts/audit_train_eval_overlap.py`
 - [ ] Continual / mix train on diversity JSONL (ask before long GPU)
 
 **Non-goals here:** dual-RL rule generator, full fairy engine, claiming fluency/MMLU gains.

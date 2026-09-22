@@ -45,6 +45,24 @@ def test_allocator_and_debate() -> None:
     _assert_samples(generate_debate_episode(rng))
 
 
+def test_debate_train_eval_topics_disjoint() -> None:
+    from systemone_lite.synth.debate_judge import EVAL_TOPICS, TRAIN_TOPICS
+
+    train_ids = {t[0] for t in TRAIN_TOPICS}
+    eval_ids = {t[0] for t in EVAL_TOPICS}
+    assert train_ids.isdisjoint(eval_ids)
+
+    train_topics: set[str] = set()
+    eval_topics: set[str] = set()
+    for seed in range(40):
+        for s in generate_debate_episode(random.Random(seed), split="train"):
+            train_topics.add(str(s.meta["topic_id"]))
+        for s in generate_debate_episode(random.Random(1000 + seed), split="eval"):
+            eval_topics.add(str(s.meta["topic_id"]))
+    assert train_topics <= train_ids
+    assert eval_topics <= eval_ids
+    assert train_topics.isdisjoint(eval_topics)
+
 def test_billing_ticket_routes_to_billing() -> None:
     found = False
     for seed in range(300):

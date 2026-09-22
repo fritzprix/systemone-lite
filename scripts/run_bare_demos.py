@@ -25,6 +25,7 @@ MODELS = {
     "sft_model": str(ROOT / "checkpoints" / "systemone-mixed-sft"),  # Phase 1
     "spatial_v2": str(ROOT / "checkpoints" / "systemone-spatial-v2"),  # Phase 2 gate
     "spatial_v2b": str(ROOT / "checkpoints" / "systemone-spatial-v2b"),  # continual 20k
+    "spatial_v2_s1": str(ROOT / "checkpoints" / "systemone-spatial-v2-s1"),  # v2+cloze 20k
 }
 
 

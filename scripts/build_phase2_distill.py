@@ -163,13 +163,32 @@ def main() -> None:
         spatial_train_samples.extend([ensure_gym(s.to_json(), game_name) for s in raw_samples])
         print(f"    ✓ {game_name}: {len(raw_samples)} samples generated", flush=True)
 
-    # 2. Generate 2D Spatial Eval Samples
+    # 2. Generate 2D Spatial Eval Samples (reject states seen in train)
     print(f"\n=== 2. Generating 2D Spatial Evaluation Samples ({args.eval_spatial_per_game} per game) ===")
+    from systemone_lite.synth.leakage import collect_fingerprints, generate_disjoint
+
     spatial_eval_samples: list[dict] = []
+    train_by_gym: dict[str, list[dict]] = {}
+    for row in spatial_train_samples:
+        g = str((row.get("meta") or {}).get("gym") or "?")
+        train_by_gym.setdefault(g, []).append(row)
+
     for idx, (game_name, gen_fn) in enumerate(SPATIAL_GENERATORS.items()):
-        game_seed = args.seed + 90000 + idx * 1000
-        raw_eval = gen_fn(args.eval_spatial_per_game, seed=game_seed)
-        spatial_eval_samples.extend([ensure_gym(s.to_json(), game_name) for s in raw_eval])
+        excl = collect_fingerprints(train_by_gym.get(game_name, []), mode="state_only")
+
+        def factory(count: int, seed: int, _gen=gen_fn) -> list:
+            return _gen(count, seed=seed)
+
+        raw_eval = generate_disjoint(
+            factory,
+            args.eval_spatial_per_game,
+            exclude=excl,
+            mode="state_only",
+            seed=args.seed + 90000 + idx * 1000,
+            batch=max(64, args.eval_spatial_per_game),
+        )
+        spatial_eval_samples.extend([ensure_gym(r, game_name) for r in raw_eval])
+        print(f"    ✓ {game_name}: {len(raw_eval)} disjoint eval samples", flush=True)
 
     # 3. Load & Scale General NLP + Chess
     print(f"\n=== 3. Loading General NLP & Chess 2D Datasets ===")

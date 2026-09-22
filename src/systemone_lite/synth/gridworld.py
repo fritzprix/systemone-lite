@@ -250,7 +250,9 @@ def generate_gridworld_samples(
             elif near:
                 want_alert = rng.random() < 0.25
             if want_alert and len(samples) < n_samples:
-                samples.append(_alert_sample(state, near))
+                alert = _alert_sample(state, near)
+                alert.meta["symbol_remap"] = role_syms
+                samples.append(alert)
                 if near:
                     alert_yes += 1
                 else:

@@ -1,23 +1,38 @@
-"""DebateJudge — short claim adjudication with evidence-based labels."""
+"""DebateJudge — short claim adjudication with evidence-based labels.
+
+Train and eval use **disjoint topics** so score cannot come from memorizing
+the same six proposals in both splits.
+"""
 
 from __future__ import annotations
 
 import random
-from typing import Any
+from typing import Any, Literal
 
 from systemone_lite.chess_data import DistillSample
 from systemone_lite.synth.common import choice_sample, paraphrase
 
-TOPICS = [
+Split = Literal["train", "eval"]
+
+TRAIN_TOPICS = [
     ("deploy_friday", "We should deploy on Friday"),
     ("remote_first", "Remote-first improves productivity"),
     ("raise_prices", "We should raise prices 10%"),
     ("rewrite_backend", "We should rewrite the backend in Rust"),
     ("hire_junior", "We should hire more junior engineers"),
-    ("open_source_core", "We should open-source the core library"),
 ]
 
-CLAIMS = {
+EVAL_TOPICS = [
+    ("open_source_core", "We should open-source the core library"),
+    ("four_day_week", "We should move to a four-day work week"),
+    ("kill_feature_x", "We should sunset Feature X this quarter"),
+    ("buy_competitor", "We should acquire Competitor Y"),
+]
+
+# Backward-compatible alias (union) — prefer TRAIN_/EVAL_ explicitly.
+TOPICS = TRAIN_TOPICS + EVAL_TOPICS
+
+CLAIMS: dict[str, dict[str, list[tuple[str, bool]]]] = {
     "deploy_friday": {
         "pro": [
             ("Customers asked for the fix this week", True),
@@ -90,7 +105,47 @@ CLAIMS = {
             ("Competitors will steal our vibes", False),
         ],
     },
+    "four_day_week": {
+        "pro": [
+            ("Pilot showed same output with 10% less overtime", True),
+            ("Candidate offer-accept rate rose 18%", True),
+            ("Long weekends are trendy", False),
+        ],
+        "con": [
+            ("Customer SLAs require weekday coverage five days", True),
+            ("Payroll cost model assumes 5-day capacity", True),
+            ("Fridays are when inspiration strikes", False),
+        ],
+    },
+    "kill_feature_x": {
+        "pro": [
+            ("Feature X costs 30% of eng hours for 2% revenue", True),
+            ("NPS for X users is below company average", True),
+            ("I never liked Feature X", False),
+        ],
+        "con": [
+            ("Top-3 enterprise contracts list X as must-have", True),
+            ("Migration path for X users is unfinished", True),
+            ("Sunsets always feel mean", False),
+        ],
+    },
+    "buy_competitor": {
+        "pro": [
+            ("Diligence shows 40% customer overlap with low churn", True),
+            ("Their sales channel fills a geo we lack", True),
+            ("Acquisitions are exciting", False),
+        ],
+        "con": [
+            ("Integration would freeze our roadmap for two quarters", True),
+            ("Ask exceeds board-approved M&A budget", True),
+            ("Their logo looks cooler than ours", False),
+        ],
+    },
 }
+
+_TRAIN_IDS = {t[0] for t in TRAIN_TOPICS}
+_EVAL_IDS = {t[0] for t in EVAL_TOPICS}
+assert not (_TRAIN_IDS & _EVAL_IDS)
 
 WIN_INSTR = [
     "Which side is better supported by evidence? Reply with one option letter.",
@@ -112,10 +167,17 @@ CONF_INSTR = [
 ]
 
 
+def topics_for(split: Split) -> list[tuple[str, str]]:
+    return TRAIN_TOPICS if split == "train" else EVAL_TOPICS
+
+
 def generate_debate_episode(
-    rng: random.Random, *, hard: bool = False
+    rng: random.Random,
+    *,
+    hard: bool = False,
+    split: Split = "train",
 ) -> list[DistillSample]:
-    topic_id, question = rng.choice(TOPICS)
+    topic_id, question = rng.choice(topics_for(split))
     pack = CLAIMS[topic_id]
     n_pro = rng.randint(1, 3)
     n_con = rng.randint(1, 3)
@@ -177,6 +239,13 @@ def generate_debate_episode(
             "oppose": "Side B — oppose the proposal",
         }
 
+    topic_meta = {
+        "gym": "debate_judge",
+        "topic_id": topic_id,
+        "topic_split": split,
+        "pro_ev": pro_ev,
+        "con_ev": con_ev,
+    }
     samples = [
         choice_sample(
             task="debate.winner",
@@ -184,7 +253,7 @@ def generate_debate_episode(
             instructions=paraphrase(rng, WIN_INSTR),
             options=win_opts,
             label_key=winner,
-            meta={"gym": "debate_judge", "pro_ev": pro_ev, "con_ev": con_ev},
+            meta=topic_meta,
             rng=rng,
             hard=hard,
         )
@@ -201,7 +270,7 @@ def generate_debate_episode(
                 "no": "Too thin or tied — needs more evidence",
             },
             label_key="yes" if enough else "no",
-            meta={"gym": "debate_judge", "schema_hint": "noul"},
+            meta={**topic_meta, "schema_hint": "noul"},
             rng=rng,
             hard=hard,
         )
@@ -225,7 +294,7 @@ def generate_debate_episode(
                 "2": "high confidence",
             },
             label_key=conf,
-            meta={"gym": "debate_judge", "schema_hint": "score"},
+            meta={**topic_meta, "schema_hint": "score"},
             rng=rng,
             hard=hard,
         )

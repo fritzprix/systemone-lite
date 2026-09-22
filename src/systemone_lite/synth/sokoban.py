@@ -580,7 +580,9 @@ def generate_sokoban_samples(
                 and alert_no <= alert_yes + 2
                 and rng.random() < 0.35
             ):
-                samples.append(_deadlock_alert(state, False))
+                alert = _deadlock_alert(state, False)
+                alert.meta["symbol_remap"] = role_syms
+                samples.append(alert)
                 alert_no += 1
 
             legal_actions = curr_level.get_legal_actions()

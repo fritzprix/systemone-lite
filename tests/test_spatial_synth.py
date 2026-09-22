@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
+import re
+
 from systemone_lite.synth.connect4 import generate_connect4_samples
 from systemone_lite.synth.game2048 import generate_2048_samples
 from systemone_lite.synth.gridworld import generate_gridworld_samples
 from systemone_lite.synth.sokoban import generate_sokoban_samples
+
+
+def _player_glyph(sample) -> str:
+    remap = (sample.meta or {}).get("symbol_remap")
+    if isinstance(remap, dict) and remap.get("player"):
+        return str(remap["player"])
+    legend = str(sample.state.get("legend") or "")
+    m = re.search(r"'([^']+)':\s*Player", legend)
+    return m.group(1) if m else "@"
 
 
 def test_sokoban_generator() -> None:
@@ -14,8 +25,9 @@ def test_sokoban_generator() -> None:
     for s in samples:
         assert s.meta["gym"] == "sokoban"
         assert "grid_map" in s.state
+        assert "legend" in s.state
         assert s.label_alias in s.criteria
-        assert "#" in s.state["grid_map"]
+        assert _player_glyph(s) in s.state["grid_map"] or "$" in s.state["grid_map"]
 
 
 def test_2048_generator() -> None:
@@ -33,8 +45,9 @@ def test_gridworld_generator() -> None:
     for s in samples:
         assert s.meta["gym"] == "gridworld"
         assert "grid_map" in s.state
+        assert "legend" in s.state
         assert s.label_alias in s.criteria
-        assert "@" in s.state["grid_map"]
+        assert _player_glyph(s) in s.state["grid_map"]
 
 
 def test_connect4_generator() -> None:

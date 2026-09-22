@@ -164,6 +164,23 @@ balance, leaks) and symbol remapping landed **after** this checkpoint — see po
 A follow-on continual run (`systemone-spatial-v2b`) may still be in progress; do not
 treat unfinished mid-ckpts as the published Phase 2 result.
 
+### Continual v2→s1 (cloze + zero-leakage mix)
+
+Checkpoint: `checkpoints/systemone-spatial-v2-s1` (20 000 steps from `spatial-v2`).  
+Local mix: train **240 800** / eval **4 700** (CA + word games + **nlp_cloze**; train∩eval **0.00%**).  
+Note: [`docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`](docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md).  
+Demos: [`benchmarks/demos/spatial_v2_s1/`](benchmarks/demos/spatial_v2_s1/).
+
+#### JevBench (local T=1.0, 231 tasks)
+
+| Model | Acc | ECE |
+|---|---:|---:|
+| Phase 1 mixed | 45.9% | **0.221** |
+| Spatial v2 | 42.9% | 0.358 |
+| **v2-s1 (cloze continue)** | **49.8%** | 0.307 |
+
+Report: [`benchmarks/jevbench_spatial_v2_s1.json`](benchmarks/jevbench_spatial_v2_s1.json).  
+Accuracy rose vs v2/P1; calibration (ECE) still trails Phase 1.
 ## Resources
 
 | Resource | Link |

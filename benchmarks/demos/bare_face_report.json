@@ -245,6 +245,66 @@
         "winner": null,
         "avg_latency_ms": 30.1
       }
+    },
+    "spatial_v2_s1": {
+      "model": "/home/fritzprix/my_works/systemone-lite/checkpoints/systemone-spatial-v2-s1",
+      "tag": "spatial_v2_s1",
+      "chess_proper": {
+        "plies": 10,
+        "moves": [
+          "d4",
+          "g6",
+          "Nf3",
+          "Nf6",
+          "e4",
+          "Bg7",
+          "Bb5",
+          "Nh5",
+          "Rg1",
+          "g5"
+        ],
+        "avg_latency_ms": 242.5,
+        "result": "Max plies reached"
+      },
+      "chess_multistep": {
+        "plies": 10,
+        "moves": [
+          "c4",
+          "Nf6",
+          "c5",
+          "d5",
+          "Nf3",
+          "d4",
+          "c6",
+          "d3",
+          "cxb7",
+          "dxe2"
+        ],
+        "avg_latency_ms": 63.9,
+        "result": ""
+      },
+      "game2048": {
+        "steps": 15,
+        "score": 60,
+        "max_tile": 16,
+        "avg_latency_ms": 28.4
+      },
+      "gridworld": {
+        "steps": 1,
+        "won": false,
+        "died": true,
+        "avg_latency_ms": 31.0
+      },
+      "sokoban": {
+        "steps": 10,
+        "won": false,
+        "avg_latency_ms": 25.9
+      },
+      "connect4": {
+        "turns": 12,
+        "winner": null,
+        "avg_latency_ms": 28.7
+      }
     }
   }
 }

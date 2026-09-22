@@ -102,16 +102,40 @@ def main() -> None:
     train_rng = random.Random(args.seed)
     pool: list[DistillSample] = []
     # Round-robin episodes so the raw dump is already mixed.
+    # Debate: TRAIN topics only in the pool (eval topics are held out below).
     for i in range(args.episodes):
         for gym_name in selected:
             gen = GYMS[gym_name]
             # Per-episode child RNG keeps gyms independent but reproducible.
             ep_rng = random.Random(train_rng.randint(0, 2**31 - 1))
-            pool.extend(gen(ep_rng, hard=False))
+            if gym_name == "debate":
+                pool.extend(gen(ep_rng, hard=False, split="train"))
+            else:
+                pool.extend(gen(ep_rng, hard=False))
 
-    train_rows, iid_eval = stratified_split(
-        pool, eval_frac=args.eval_frac, seed=args.seed + 1
+    # Ticket/alloc: stratified row split. Debate: separate held-out topics.
+    non_debate = [r for r in pool if r.meta.get("gym") != "debate_judge"]
+    debate_train = [r for r in pool if r.meta.get("gym") == "debate_judge"]
+    train_nd, iid_nd = stratified_split(
+        non_debate, eval_frac=args.eval_frac, seed=args.seed + 1
     )
+
+    n_debate_eval = max(1, int(round(len(debate_train) * args.eval_frac))) if debate_train else 0
+    # Keep all train-topic debate in train; build iid eval from EVAL topics.
+    debate_eval: list[DistillSample] = []
+    if n_debate_eval and "debate" in selected:
+        eval_rng = random.Random(args.seed + 2)
+        while len(debate_eval) < n_debate_eval:
+            ep_rng = random.Random(eval_rng.randint(0, 2**31 - 1))
+            debate_eval.extend(
+                generate_debate_episode(ep_rng, hard=False, split="eval")
+            )
+        debate_eval = debate_eval[:n_debate_eval]
+
+    train_rows = train_nd + debate_train
+    iid_eval = iid_nd + debate_eval
+    random.Random(args.seed + 3).shuffle(train_rows)
+    random.Random(args.seed + 4).shuffle(iid_eval)
 
     hard_rng = random.Random(args.seed + 10_000)
     hard_eval: list[DistillSample] = []
@@ -119,7 +143,11 @@ def main() -> None:
         for gym_name in selected:
             gen = GYMS[gym_name]
             ep_rng = random.Random(hard_rng.randint(0, 2**31 - 1))
-            hard_eval.extend(gen(ep_rng, hard=True))
+            if gym_name == "debate":
+                # Hard eval also uses held-out topics (never train topics).
+                hard_eval.extend(gen(ep_rng, hard=True, split="eval"))
+            else:
+                hard_eval.extend(gen(ep_rng, hard=True))
 
     out = args.out_dir
     write_jsonl(out / "general_train.jsonl", train_rows)
