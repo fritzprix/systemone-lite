@@ -63,5 +63,4 @@ Prioritize **S1-shaped** data (alerts / legal / recovery + stronger text share).
 
 - Not an official JevBench leaderboard submission.
 - Held-out top-1 ≠ long rollout skill (demos still fail GridWorld/Sokoban clear).
-- Hub mirrors (2026-09-22+): dataset `dwidlee/systemone-lite-phase2` and **stable model**
-  `dwidlee/systemone-lite-0.5b` (experiment-named Hub repos deprecated).
+- Hub mirrors: dataset `dwidlee/systemone-lite-phase2`, model `dwidlee/systemone-lite-0.5b` only.
