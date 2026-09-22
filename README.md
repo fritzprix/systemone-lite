@@ -89,17 +89,17 @@ Raw reports: [`benchmarks/jevbench_spatial_v2_s1.json`](benchmarks/jevbench_spat
 
 ## Limits (read this)
 
-- **Small model, single-token answers.** Good for short typed decisions (routing,
-  yes/no, pick-one). Bad at long multi-step planning; puzzle/game rollouts still
-  fail often even when snapshot accuracy looks fine.
-- **Calibration is mediocre.** Accuracies above are usable for demos; do not treat
-  returned probabilities as well-calibrated confidence.
+- **0.5B.** Useful for demos and local experiments; not a production decision model.
+- **Calibration is mediocre.** Do not treat returned probabilities as
+  well-calibrated confidence.
 - **Different from production Jev.** Own weights, own scoring path, own
   `confidence` formula `(p_max - 1/n)/(1 - 1/n)`.
-- **Option keys in training are letter aliases.** Multi-token option ids are not
-  first-class.
-- **Eval:** use the Hub dataset **`test`** split for held-out numbers — never score
-  on `train`.
+- **Closed-option scoring.** The model does not generate free text; it ranks the
+  given criteria / yes–no / score symbols (usually one vocab id each). JSON option
+  *keys* like `"billing"` are mapped after scoring — they are not scored as full
+  strings.
+- **Eval:** use the Hub dataset **`test`** split for held-out numbers — never
+  score on `train`.
 
 Training data:
 [`dwidlee/systemone-lite-phase2`](https://huggingface.co/datasets/dwidlee/systemone-lite-phase2)
