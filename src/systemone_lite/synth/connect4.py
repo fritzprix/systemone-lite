@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from systemone_lite.chess_data import DistillSample, alias_criteria
-from systemone_lite.synth.common import choice_sample
+from systemone_lite.synth.common import TASK_SCHEMA_ACTION_V2, cap_options, choice_sample
 
 COLS = 7
 ROWS = 6
+MAX_DROP_OPTIONS = 3
 
 
 @dataclass
@@ -163,13 +164,49 @@ def _threat_alert(
     )
     key_to_alias = {v: k for k, v in alias_map.items()}
     lbl_key = "yes" if has_threat else "no"
-    meta: dict[str, Any] = {"gym": "connect4", "schema": "noul"}
+    meta: dict[str, Any] = {
+        "gym": "connect4",
+        "schema": "noul",
+        "task_schema": TASK_SCHEMA_ACTION_V2,
+    }
     if extra_meta:
         meta.update(extra_meta)
     return DistillSample(
         task="connect4.threat_alert",
         state=state,
         instructions="Does the opponent have an immediate 4-in-a-row winning threat next turn?",
+        criteria=criteria,
+        label_alias=key_to_alias[lbl_key],
+        label_key=lbl_key,
+        meta=meta,
+    )
+
+
+def _win_now_alert(
+    state: dict[str, Any],
+    can_win: bool,
+    *,
+    extra_meta: dict[str, Any] | None = None,
+) -> DistillSample:
+    criteria, alias_map = alias_criteria(
+        {
+            "yes": "Current side can win immediately this turn",
+            "no": "No immediate winning drop this turn",
+        }
+    )
+    key_to_alias = {v: k for k, v in alias_map.items()}
+    lbl_key = "yes" if can_win else "no"
+    meta: dict[str, Any] = {
+        "gym": "connect4",
+        "schema": "noul",
+        "task_schema": TASK_SCHEMA_ACTION_V2,
+    }
+    if extra_meta:
+        meta.update(extra_meta)
+    return DistillSample(
+        task="connect4.win_now_alert",
+        state=state,
+        instructions="Can the side to move win immediately with one drop this turn?",
         criteria=criteria,
         label_alias=key_to_alias[lbl_key],
         label_key=lbl_key,
@@ -213,12 +250,16 @@ def generate_connect4_samples(
     seed: int = 42,
     hard: bool = False,
 ) -> list[DistillSample]:
-    """Connect Four distill with diversified drops + balanced threat alerts."""
+    """Connect Four distill (action_v2): capped legal drops + threat/win alerts.
+
+    Drop choices use only legal columns and are hard-capped at ``MAX_DROP_OPTIONS``.
+    Instant-judgment alerts are a larger share of the mix than uncapped 7-way drops.
+    """
     rng = random.Random(seed)
     samples: list[DistillSample] = []
     alert_yes = 0
     alert_no = 0
-    yes_budget = max(1, n_samples // 5)
+    yes_budget = max(1, n_samples // 3)
     drop_counts: dict[str, int] = {str(c + 1): 0 for c in range(COLS)}
 
     def _maybe_add_drop(
@@ -227,10 +268,13 @@ def generate_connect4_samples(
         label_1based: str,
         to_move: str,
         mirror_h: bool,
+        legal_1based: list[str],
         forced_block: bool = False,
     ) -> None:
         nonlocal samples
         if len(samples) >= n_samples:
+            return
+        if label_1based not in legal_1based:
             return
         # Soft balance: skip free-drop samples that widen the majority gap too far
         if not forced_block:
@@ -240,13 +284,16 @@ def generate_connect4_samples(
             this = drop_counts.get(label_1based, 0)
             if this > minority + max(40, n_samples // 80) and this >= majority:
                 return
-        options = {str(c + 1): f"Drop in Column {c + 1}" for c in range(COLS)}
+        options = {c: f"Drop in Column {c}" for c in legal_1based}
+        options = cap_options(
+            options, label_1based, max_n=MAX_DROP_OPTIONS, rng=rng
+        )
         s = choice_sample(
             task="connect4.drop",
             state=state,
             instructions=(
                 "Inspect the 7x6 Connect Four board. "
-                "Choose the column (1 to 7) to drop your disc."
+                "Choose among the listed legal columns to drop your disc."
             ),
             options=options,
             label_key=label_1based,
@@ -254,6 +301,8 @@ def generate_connect4_samples(
                 "gym": "connect4",
                 "turn": to_move,
                 "aug_mirror_h": mirror_h,
+                "task_schema": TASK_SCHEMA_ACTION_V2,
+                "legal_columns": list(legal_1based),
                 **({"forced_block": True} if forced_block else {}),
             },
             rng=rng,
@@ -264,7 +313,7 @@ def generate_connect4_samples(
 
     while len(samples) < n_samples:
         # Top-up explicit threat-yes (+ matching block drop)
-        if alert_yes < yes_budget and alert_yes <= alert_no and rng.random() < 0.4:
+        if alert_yes < yes_budget and alert_yes <= alert_no and rng.random() < 0.45:
             board, to_move, block_col = make_horizontal_threat_board(rng)
             from systemone_lite.synth.augmentation import apply_connect4_mirror
 
@@ -275,6 +324,7 @@ def generate_connect4_samples(
             else:
                 aug_board = board
                 aug_block = block_col + 1
+            legal = [str(c + 1) for c in aug_board.get_legal_columns()]
             state = {
                 "grid_map": f"\n{aug_board.render_ascii()}\n",
                 "turn": "Red (R)" if to_move == "R" else "Yellow (Y)",
@@ -293,6 +343,7 @@ def generate_connect4_samples(
                 label_1based=str(aug_block),
                 to_move=to_move,
                 mirror_h=mirror_h,
+                legal_1based=legal,
                 forced_block=True,
             )
             continue
@@ -303,8 +354,8 @@ def generate_connect4_samples(
         for turn_idx in range(max_turns):
             if len(samples) >= n_samples:
                 break
-            legal = board.get_legal_columns()
-            if not legal:
+            legal_cols = board.get_legal_columns()
+            if not legal_cols:
                 break
 
             curr_player = "R" if turn_idx % 2 == 0 else "Y"
@@ -326,18 +377,33 @@ def generate_connect4_samples(
                 aug_board = board
                 aug_best_col_1based = best_col + 1
 
+            legal_1based = [str(c + 1) for c in aug_board.get_legal_columns()]
             state = {
                 "grid_map": f"\n{aug_board.render_ascii()}\n",
                 "turn": f"{'Red (R)' if curr_player == 'R' else 'Yellow (Y)'}",
                 "legend": "'R': Red disc, 'Y': Yellow disc, '.': Empty slot. Columns are 1 to 7.",
             }
 
-            if rng.random() < 0.70:
+            can_win = any(
+                aug_board.is_winning_move(c, curr_player)
+                for c in aug_board.get_legal_columns()
+            )
+            if len(samples) < n_samples and rng.random() < 0.40:
+                if can_win and alert_yes <= alert_no + 2:
+                    samples.append(_win_now_alert(state, True))
+                    alert_yes += 1
+                elif (not can_win) and alert_no <= alert_yes + 2:
+                    samples.append(_win_now_alert(state, False))
+                    alert_no += 1
+
+            # Fewer raw drops than v1; prefer alerts
+            if rng.random() < 0.45:
                 _maybe_add_drop(
                     state=state,
                     label_1based=str(aug_best_col_1based),
                     to_move=curr_player,
                     mirror_h=mirror_h,
+                    legal_1based=legal_1based,
                     forced_block=False,
                 )
 
@@ -350,7 +416,7 @@ def generate_connect4_samples(
                 (not has_threat)
                 and alert_no <= alert_yes
                 and len(samples) < n_samples
-                and rng.random() < 0.35
+                and rng.random() < 0.45
             ):
                 samples.append(_threat_alert(state, False))
                 alert_no += 1

@@ -149,11 +149,16 @@ def load_general_from_hf(seed: int) -> list[dict]:
 
 
 def load_chess(limit: int | None, seed: int) -> list[dict]:
-    local = ROOT / "data" / "chess_train_5k_2d.jsonl"
-    if local.exists():
-        print(f"Loading chess from {local} ...", flush=True)
-        rows = [ensure_gym(r, "chess") for r in load_jsonl(local)]
-        return rows
+    for local in (
+        ROOT / "data" / "chess_train_staged.jsonl",
+        ROOT / "data" / "chess_train_5k_2d.jsonl",
+    ):
+        if local.exists():
+            print(f"Loading chess from {local} ...", flush=True)
+            rows = [ensure_gym(r, "chess") for r in load_jsonl(local)]
+            if local.name.endswith("_staged.jsonl"):
+                rows = [r for r in rows if r.get("task") != "move"]
+            return rows
 
     from datasets import load_dataset
 

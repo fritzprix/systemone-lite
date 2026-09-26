@@ -8,7 +8,17 @@ from dataclasses import dataclass
 from typing import Any
 
 from systemone_lite.chess_data import DistillSample, alias_criteria
-from systemone_lite.synth.common import choice_sample
+from systemone_lite.synth.augmentation import FLIP_H_ACTION, ROT90_ACTION
+from systemone_lite.synth.common import TASK_SCHEMA_ACTION_V2, choice_sample
+
+
+def _map_action(action: str, rot_k: int, flip_h: bool) -> str:
+    a = action
+    for _ in range(rot_k % 4):
+        a = ROT90_ACTION[a]
+    if flip_h:
+        a = FLIP_H_ACTION[a]
+    return a
 
 DIRECTIONS = {
     "UP": (-1, 0),
@@ -424,7 +434,11 @@ def make_corner_deadlock_level(
 
 
 def _render_aug_state(
-    level: SokobanLevel, rng: random.Random
+    level: SokobanLevel,
+    rng: random.Random,
+    *,
+    apply_remap: bool = True,
+    keep_canonical_prob: float = 0.6,
 ) -> tuple[dict[str, Any], int, bool, dict[str, str]]:
     from systemone_lite.synth.augmentation import apply_d4_transform
     from systemone_lite.synth.symbol_aug import maybe_remap_sokoban_map
@@ -433,7 +447,15 @@ def _render_aug_state(
     flip_h = rng.random() < 0.5
     raw_lines = [list(r) for r in level.render_ascii().split("\n") if r]
     aug_matrix, _ = apply_d4_transform(raw_lines, None, rot_k=rot_k, flip_h=flip_h)
-    aug_matrix, legend, role_syms = maybe_remap_sokoban_map(rng, aug_matrix)
+    if apply_remap:
+        aug_matrix, legend, role_syms = maybe_remap_sokoban_map(
+            rng, aug_matrix, keep_canonical_prob=keep_canonical_prob
+        )
+    else:
+        from systemone_lite.synth.symbol_aug import SOKOBAN_CANONICAL, SOKOBAN_LABELS, format_legend
+
+        legend = format_legend(SOKOBAN_CANONICAL, SOKOBAN_LABELS)
+        role_syms = dict(SOKOBAN_CANONICAL)
     state = {
         "grid_map": "\n" + "\n".join("".join(r) for r in aug_matrix) + "\n",
         "legend": legend,
@@ -452,7 +474,11 @@ def _deadlock_alert(
     )
     key_to_alias = {v: k for k, v in alias_map.items()}
     lbl_key = "yes" if has_deadlock else "no"
-    meta: dict[str, Any] = {"gym": "sokoban", "schema": "noul"}
+    meta: dict[str, Any] = {
+        "gym": "sokoban",
+        "schema": "noul",
+        "task_schema": TASK_SCHEMA_ACTION_V2,
+    }
     if extra_meta:
         meta.update(extra_meta)
     return DistillSample(
@@ -489,7 +515,7 @@ def generate_sokoban_samples(
     alert_yes = 0
     alert_no = 0
     # Reserve ~30% of budget for explicit deadlock-yes boards
-    yes_budget = max(1, n_samples // 5)
+    yes_budget = max(1, n_samples // 3)
 
     while len(samples) < n_samples:
         # Top-up positive deadlock class first if behind
@@ -549,24 +575,31 @@ def generate_sokoban_samples(
                 "grid_map": aug_grid_map,
                 "legend": legend,
             }
-            action_options = {d: f"Move {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"]}
+            legal_actions = curr_level.get_legal_actions()
+            aug_legal = {_map_action(d, rot_k, flip_h) for d in legal_actions}
+            label = aug_best_action or best_action
+            if label:
+                aug_legal.add(label)
+            action_options = {d: f"Move {d}" for d in sorted(aug_legal)}
 
-            if rng.random() < 0.70:
+            if rng.random() < 0.55 and label in action_options:
                 s = choice_sample(
                     task="sokoban.direction",
                     state=state,
                     instructions=(
                         "Inspect the 2D Sokoban map. "
-                        "Choose the move direction: UP, DOWN, LEFT, RIGHT."
+                        "Choose among the listed legal move directions."
                     ),
                     options=action_options,
-                    label_key=aug_best_action or best_action,
+                    label_key=label,
                     meta={
                         "gym": "sokoban",
                         "level_size": f"{curr_level.height}x{curr_level.width}",
                         "aug_rot_k": rot_k,
                         "aug_flip_h": flip_h,
                         "symbol_remap": role_syms,
+                        "task_schema": TASK_SCHEMA_ACTION_V2,
+                        "legal_dirs": sorted(aug_legal),
                     },
                     rng=rng,
                     hard=hard,
@@ -578,14 +611,13 @@ def generate_sokoban_samples(
                 len(samples) < n_samples
                 and not curr_level.has_any_deadlock()
                 and alert_no <= alert_yes + 2
-                and rng.random() < 0.35
+                and rng.random() < 0.45
             ):
                 alert = _deadlock_alert(state, False)
                 alert.meta["symbol_remap"] = role_syms
                 samples.append(alert)
                 alert_no += 1
 
-            legal_actions = curr_level.get_legal_actions()
             if best_action not in legal_actions:
                 break
             next_player, next_boxes, _ = legal_actions[best_action]
@@ -597,3 +629,206 @@ def generate_sokoban_samples(
             )
 
     return samples[:n_samples]
+
+
+def generate_sokoban_eval_balanced(
+    n_samples: int,
+    *,
+    seed: int = 0,
+    exclude: set[str] | None = None,
+    n_alerts: int | None = None,
+    remap_alert_prob: float = 0.35,
+) -> list[dict[str, Any]]:
+    """Held-out Sokoban rows with balanced deadlock yes/no and train-state rejection.
+
+    Fixes eval skew where ``generate_disjoint`` over-sampled ``deadlock_synth``
+    yes boards (~75% yes). Direction rows use action_v2 legal-only options.
+    """
+    from systemone_lite.synth.leakage import fingerprint
+
+    rng = random.Random(seed)
+    excl = set(exclude or ())
+    if n_alerts is None:
+        n_alerts = max(2, (n_samples * 3) // 10)  # ~30%
+    if n_alerts % 2:
+        n_alerts -= 1
+    n_yes = n_alerts // 2
+    n_no = n_alerts // 2
+    n_dir = n_samples - n_alerts
+
+    out: list[dict[str, Any]] = []
+    yes_rows: list[dict[str, Any]] = []
+    no_rows: list[dict[str, Any]] = []
+    dir_rows: list[dict[str, Any]] = []
+
+    def _try_keep(row: dict[str, Any], bucket: list[dict[str, Any]], limit: int) -> bool:
+        if len(bucket) >= limit:
+            return False
+        row = dict(row)
+        meta = dict(row.get("meta") or {})
+        meta["gym"] = "sokoban"
+        row["meta"] = meta
+        fp = fingerprint(row, mode="state_only")
+        if fp in excl:
+            return False
+        excl.add(fp)
+        bucket.append(row)
+        return True
+
+    attempts = 0
+    while len(yes_rows) < n_yes and attempts < n_yes * 80:
+        attempts += 1
+        base = _pick_level(rng) or parse_level(rng.choice(MICRO_LEVELS))
+        dead = make_corner_deadlock_level(base, rng)
+        if dead is None:
+            continue
+        apply_remap = rng.random() < remap_alert_prob
+        state, rot_k, flip_h, role_syms = _render_aug_state(
+            dead, rng, apply_remap=apply_remap, keep_canonical_prob=0.85
+        )
+        sample = _deadlock_alert(
+            state,
+            True,
+            extra_meta={
+                "aug_rot_k": rot_k,
+                "aug_flip_h": flip_h,
+                "deadlock_synth": True,
+                "symbol_remap": role_syms,
+                "eval_balanced": True,
+                "remap_applied": apply_remap,
+            },
+        )
+        _try_keep(sample.to_json(), yes_rows, n_yes)
+
+    attempts = 0
+    while len(no_rows) < n_no and attempts < n_no * 80:
+        attempts += 1
+        level = _pick_level(rng) or parse_level(rng.choice(MICRO_LEVELS))
+        path = solve_sokoban_bfs(level)
+        if not path:
+            continue
+        # Use start or mid-path state known deadlock-free on optimal path
+        curr = SokobanLevel(
+            grid=[list(r) for r in level.grid],
+            player=level.player,
+            boxes=set(level.boxes),
+            targets=set(level.targets),
+        )
+        if curr.has_any_deadlock():
+            continue
+        steps = rng.randint(0, max(0, len(path) - 1))
+        for a in path[:steps]:
+            legal = curr.get_legal_actions()
+            if a not in legal:
+                break
+            np_, nb, _ = legal[a]
+            curr = SokobanLevel(curr.grid, np_, nb, curr.targets)
+        if curr.has_any_deadlock():
+            continue
+        apply_remap = rng.random() < remap_alert_prob
+        state, rot_k, flip_h, role_syms = _render_aug_state(
+            curr, rng, apply_remap=apply_remap, keep_canonical_prob=0.85
+        )
+        sample = _deadlock_alert(
+            state,
+            False,
+            extra_meta={
+                "aug_rot_k": rot_k,
+                "aug_flip_h": flip_h,
+                "deadlock_synth": False,
+                "symbol_remap": role_syms,
+                "eval_balanced": True,
+                "remap_applied": apply_remap,
+            },
+        )
+        _try_keep(sample.to_json(), no_rows, n_no)
+
+    attempts = 0
+    while len(dir_rows) < n_dir and attempts < n_dir * 100:
+        attempts += 1
+        level = _pick_level(rng) or parse_level(rng.choice(MICRO_LEVELS))
+        path = solve_sokoban_bfs(level)
+        if not path:
+            continue
+        curr = SokobanLevel(
+            grid=[list(r) for r in level.grid],
+            player=level.player,
+            boxes=set(level.boxes),
+            targets=set(level.targets),
+        )
+        for best_action in path:
+            if len(dir_rows) >= n_dir:
+                break
+            from systemone_lite.synth.augmentation import apply_d4_transform
+            from systemone_lite.synth.symbol_aug import maybe_remap_sokoban_map
+
+            rot_k = rng.randint(0, 3)
+            flip_h = rng.random() < 0.5
+            raw_lines = [list(r) for r in curr.render_ascii().split("\n") if r]
+            aug_matrix, aug_best = apply_d4_transform(
+                raw_lines, best_action, rot_k=rot_k, flip_h=flip_h
+            )
+            apply_remap = rng.random() < 0.4
+            if apply_remap:
+                aug_matrix, legend, role_syms = maybe_remap_sokoban_map(
+                    rng, aug_matrix, keep_canonical_prob=0.7
+                )
+            else:
+                from systemone_lite.synth.symbol_aug import (
+                    SOKOBAN_CANONICAL,
+                    SOKOBAN_LABELS,
+                    format_legend,
+                )
+
+                legend = format_legend(SOKOBAN_CANONICAL, SOKOBAN_LABELS)
+                role_syms = dict(SOKOBAN_CANONICAL)
+            state = {
+                "grid_map": "\n" + "\n".join("".join(r) for r in aug_matrix) + "\n",
+                "legend": legend,
+            }
+            legal = curr.get_legal_actions()
+            aug_legal = {_map_action(d, rot_k, flip_h) for d in legal}
+            label = aug_best or best_action
+            if label:
+                aug_legal.add(label)
+            if label not in aug_legal:
+                continue
+            options = {d: f"Move {d}" for d in sorted(aug_legal)}
+            sample = choice_sample(
+                task="sokoban.direction",
+                state=state,
+                instructions=(
+                    "Inspect the 2D Sokoban map. "
+                    "Choose among the listed legal move directions."
+                ),
+                options=options,
+                label_key=label,
+                meta={
+                    "gym": "sokoban",
+                    "level_size": f"{curr.height}x{curr.width}",
+                    "aug_rot_k": rot_k,
+                    "aug_flip_h": flip_h,
+                    "symbol_remap": role_syms,
+                    "task_schema": TASK_SCHEMA_ACTION_V2,
+                    "legal_dirs": sorted(aug_legal),
+                    "eval_balanced": True,
+                    "remap_applied": apply_remap,
+                },
+                rng=rng,
+                hard=False,
+            )
+            _try_keep(sample.to_json(), dir_rows, n_dir)
+            if best_action not in legal:
+                break
+            np_, nb, _ = legal[best_action]
+            curr = SokobanLevel(curr.grid, np_, nb, curr.targets)
+
+    if len(yes_rows) < n_yes or len(no_rows) < n_no or len(dir_rows) < n_dir:
+        raise RuntimeError(
+            f"sokoban eval underfilled: yes={len(yes_rows)}/{n_yes} "
+            f"no={len(no_rows)}/{n_no} dir={len(dir_rows)}/{n_dir}"
+        )
+
+    out = yes_rows + no_rows + dir_rows
+    rng.shuffle(out)
+    return out[:n_samples]

@@ -12,7 +12,7 @@ from pathlib import Path
 from huggingface_hub import HfApi, create_repo
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DIR = ROOT / "checkpoints" / "systemone-spatial-v2-s1"
+DEFAULT_DIR = ROOT / "checkpoints" / "systemone-action-v2-qwen" / "best_val"
 STABLE_REPO = "dwidlee/systemone-lite-0.5b"
 CARD_PATH = ROOT / "scripts" / "MODEL_CARD_systemone-lite-0.5b.md"
 
@@ -62,7 +62,7 @@ def main() -> None:
             repo_id=args.repo,
             repo_type="model",
             ignore_patterns=["*.tmp", ".git*", "last", "step-*", "train_meta.json"],
-            commit_message="Publish current systemone-lite-0.5b weights",
+            commit_message="Publish action-v2-qwen → systemone-lite-0.5b",
         )
     print(f"pushed {args.repo} from {args.dir}" + (" (card only)" if args.card_only else ""))
 

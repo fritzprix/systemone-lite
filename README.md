@@ -71,22 +71,28 @@ OpenAPI sketch: [`openapi/systemone.yaml`](openapi/systemone.yaml).
 
 ## How good is it?
 
-Published weights (`dwidlee/systemone-lite-0.5b`), **local** measurements
-(not an official leaderboard submission).
+Published weights (`dwidlee/systemone-lite-0.5b`, revision **action-v2-qwen**),
+**local** measurements (not an official leaderboard submission).
+n=800 SE ≈ ±1.8%p; n=231 SE ≈ ±3%p — small deltas are noise.
 
 | What | Number |
 |---|---|
-| JevBench-style public set (231 tasks) | **49.8%** accuracy · ECE **0.307** · p50 **12.6 ms** |
+| Phase2 held-out (`test`, n=4700) | **61.6%** |
+| First-800 protocol (n=800) | **63.9%** |
+| JevBench public (231 tasks, T=1.0) | **50.7%** accuracy · ECE **0.245** · p50 **13.1 ms** |
 | Short 1-question payloads | typically **~10–30 ms** |
 | Large state / many questions | typically **~100–160 ms** |
 | vs greedy AR JSON (same weights) | roughly **10–50×** faster option scoring |
 
-Uniform-random on this set is ~**32%** (many 4–5-way items), not 50%.
+Uniform-random on the JevBench set is ~**32%** (many 4–5-way items), not 50%.
+Weak gyms on full `test`: game2048 ~35%, sokoban ~38%, chess ~42%.
 
 Example rollouts (illustration only): [`benchmarks/demos/spatial_v2_s1/`](benchmarks/demos/spatial_v2_s1/).
 
-Raw reports: [`benchmarks/jevbench_spatial_v2_s1.json`](benchmarks/jevbench_spatial_v2_s1.json),
-[`benchmarks/latency_vs_ar.json`](benchmarks/latency_vs_ar.json).
+Raw reports: [`benchmarks/phase2_heldout__action_v2_qwen.json`](benchmarks/phase2_heldout__action_v2_qwen.json),
+[`benchmarks/jevbench_action_v2_qwen.json`](benchmarks/jevbench_action_v2_qwen.json),
+[`benchmarks/latency_vs_ar.json`](benchmarks/latency_vs_ar.json).  
+Postmortem: [`docs/NOTE_ACTION_V2_QWEN_POSTMORTEM.md`](docs/NOTE_ACTION_V2_QWEN_POSTMORTEM.md).
 
 ---
 

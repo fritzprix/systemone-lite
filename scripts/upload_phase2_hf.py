@@ -32,6 +32,8 @@ tags:
   - spatial
   - cloze
   - zero-leakage
+  - action-v2
+  - staged-chess
 size_categories:
   - 100K<n<1M
 ---
@@ -41,12 +43,24 @@ size_categories:
 Typed System One distill rows (`task` / `state` / `instructions` / criteria /
 `label_alias`) for [`systemone-lite`](https://github.com/fritzprix/systemone-lite).
 
-## Critical: train / test hygiene (2026-09-22)
+## Revision (2026-09-26)
 
-Earlier local mixes had **severe train∩eval state leakage** (debate ~91%,
-word_games ~87%, connect4 ~37% state_task overlap). This Hub revision is rebuilt
-with **0.00%** train∩test overlap on `state_task` fingerprints
-(`scripts/audit_train_eval_overlap.py`).
+Paired with Hub model revision **action-v2-qwen**
+(`dwidlee/systemone-lite-0.5b`).
+
+| Change | Detail |
+|---|---|
+| Chess | `staged_v1` — piece + destination, option caps ≤8 |
+| Spatial | `action_v2` — legal-only actions; Connect4 drop≤3 + win_now |
+| Sokoban `test` | Deadlock alerts balanced 75/75 yes/no; remap_alert_prob≈0.35 |
+
+Postmortem: repo `docs/NOTE_ACTION_V2_QWEN_POSTMORTEM.md`.
+
+## Critical: train / test hygiene
+
+**0.00%** train∩test overlap on `state_task` fingerprints
+(`scripts/audit_train_eval_overlap.py`). Earlier mixes had severe leakage;
+do not regress.
 
 | Mechanism | Detail |
 |---|---|
@@ -73,7 +87,8 @@ Flat columns for Hub friendliness: `state` and `meta` are JSON strings;
 
 ## Cite / notes
 
-- Leakage + cloze write-up: repo `docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`
+- Leakage + cloze: `docs/NOTE_S1_CLOZE_AND_LEAKAGE_2026-09-22.md`
+- This revision: `docs/NOTE_ACTION_V2_QWEN_POSTMORTEM.md`
 - Not affiliated with TypeSafe AI / JevBench official leaderboards.
 """
 
@@ -193,7 +208,7 @@ def main() -> None:
         args.repo,
         private=args.private,
         commit_message=(
-            "Zero-leakage rebuild: train/test disjoint (vocab/topic/state) + nlp_cloze"
+            "action-v2 + staged chess + balanced sokoban eval (0% train∩test)"
         ),
     )
 
@@ -208,8 +223,9 @@ def main() -> None:
         path_in_repo="README.md",
         repo_id=args.repo,
         repo_type="dataset",
-        commit_message="Dataset card: document zero train/test leakage",
+        commit_message="Dataset card: action-v2 / staged chess revision",
     )
+
 
     print(f"\nSuccessfully pushed: https://huggingface.co/datasets/{args.repo}")
     print(f"Splits: { {k: len(v) for k, v in ds.items()} }")

@@ -5,6 +5,9 @@ Supports mid-run checkpoints + resume so long Phase 2 jobs survive interrupts:
   python scripts/chess_finetune.py ... --out checkpoints/systemone-spatial-v2 \\
       --save-every 1000 --resume
   # optional W&B: --wandb --wandb-project systemone-lite
+
+Schedule horizon (--max-steps / epochs) is immutable within a resume chain.
+Plan the full run length up front; extending mid-run is a new experiment (see #8).
 """
 
 from __future__ import annotations
@@ -20,7 +23,13 @@ from typing import Any
 
 import torch
 from torch.utils.data import Dataset, Sampler
-from transformers import AutoModelForCausalLM, AutoTokenizer, get_linear_schedule_with_warmup
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    get_cosine_schedule_with_warmup,
+    get_constant_schedule_with_warmup,
+    get_linear_schedule_with_warmup,
+)
 
 from systemone_lite.infer import DEFAULT_MODEL_ID, reset_engine
 from systemone_lite.prompt import build_prompt
@@ -74,7 +83,7 @@ class ChoiceJsonlDataset(Dataset[Example]):
 
 
 class StratifiedGymBatchSampler(Sampler[list[int]]):
-    """Build batches that mix gyms (round-robin within each batch when possible)."""
+    """Build batches that mix gyms (round-robin with replacement when small gyms deplete)."""
 
     def __init__(
         self,
@@ -83,6 +92,7 @@ class StratifiedGymBatchSampler(Sampler[list[int]]):
         batch_size: int,
         seed: int,
         drop_last: bool = False,
+        total_samples: int | None = None,
     ) -> None:
         if batch_size < 1:
             raise ValueError("batch_size must be >= 1")
@@ -95,36 +105,39 @@ class StratifiedGymBatchSampler(Sampler[list[int]]):
         self._gym_names = sorted(self._by_gym)
         if not self._gym_names:
             raise ValueError("no gym labels for stratified sampler")
+        self.total_samples = total_samples if total_samples is not None else len(gyms)
 
     def __iter__(self):
         rng = random.Random(self.seed)
-        pools = {g: list(idxs) for g, idxs in self._by_gym.items()}
-        for idxs in pools.values():
-            rng.shuffle(idxs)
+        pools = {}
+        for g, idxs in self._by_gym.items():
+            pools[g] = list(idxs)
+            rng.shuffle(pools[g])
 
         batch: list[int] = []
         gym_cycle = list(self._gym_names)
-        while True:
-            progress = False
+        yielded_samples = 0
+
+        while yielded_samples < self.total_samples:
             rng.shuffle(gym_cycle)
             for gym in gym_cycle:
                 if not pools[gym]:
-                    continue
+                    pools[gym] = list(self._by_gym[gym])
+                    rng.shuffle(pools[gym])
                 batch.append(pools[gym].pop())
-                progress = True
+                yielded_samples += 1
                 if len(batch) == self.batch_size:
                     yield batch
                     batch = []
-            if not progress:
-                break
+                if yielded_samples >= self.total_samples:
+                    break
         if batch and not self.drop_last:
             yield batch
 
     def __len__(self) -> int:
-        n = sum(len(v) for v in self._by_gym.values())
         if self.drop_last:
-            return n // self.batch_size
-        return (n + self.batch_size - 1) // self.batch_size
+            return self.total_samples // self.batch_size
+        return (self.total_samples + self.batch_size - 1) // self.batch_size
 
 
 def encode_alias_token_id(tokenizer, alias: str) -> int:
@@ -239,6 +252,9 @@ def _config_fingerprint(
     seed: int,
     tasks: set[str] | None,
     stratified: bool,
+    grad_accum: int,
+    warmup_steps: int | None,
+    scheduler_name: str,
 ) -> dict[str, Any]:
     return {
         "data": str(data_path.resolve()),
@@ -251,7 +267,40 @@ def _config_fingerprint(
         "seed": seed,
         "tasks": sorted(tasks) if tasks is not None else ["all"],
         "stratified": stratified,
+        "grad_accum": grad_accum,
+        "warmup_steps": warmup_steps,
+        "scheduler": scheduler_name,
     }
+
+
+def build_scheduler(
+    *,
+    optimizer: torch.optim.Optimizer,
+    scheduler_name: str,
+    warmup_steps: int,
+    total_steps: int,
+):
+    name = scheduler_name.lower().strip()
+    warm = max(0, int(warmup_steps))
+    total = max(1, int(total_steps))
+    if name == "linear":
+        return get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=max(1, warm) if warm > 0 else max(1, total // 10),
+            num_training_steps=total,
+        )
+    if name == "cosine":
+        return get_cosine_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warm,
+            num_training_steps=total,
+        )
+    if name in {"constant", "constant_with_warmup"}:
+        return get_constant_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warm,
+        )
+    raise SystemExit(f"unknown --scheduler {scheduler_name!r} (linear|cosine|constant)")
 
 
 def _last_dir(output_dir: Path) -> Path:
@@ -292,6 +341,7 @@ def save_checkpoint(
             "total_steps": total_steps,
             "config": config,
             "wandb_id": wandb_id,
+            "last_lr": current_optimizer_lr(optimizer),
             "optimizer": optimizer.state_dict(),
             "scheduler": scheduler.state_dict(),
             "scaler": scaler.state_dict(),
@@ -307,6 +357,7 @@ def save_checkpoint(
         "batch_in_epoch": batch_in_epoch,
         "total_steps": total_steps,
         "avg_loss": running / max(step, 1),
+        "last_lr": current_optimizer_lr(optimizer),
         "config": config,
     }
     (ckpt_dir / "checkpoint_meta.json").write_text(json.dumps(meta, indent=2) + "\n")
@@ -393,6 +444,60 @@ def save_rotating_checkpoint(
 
 
 
+def load_best_val_acc(output_dir: Path) -> float | None:
+    meta_path = output_dir / "best_val" / "best_val_meta.json"
+    if not meta_path.exists():
+        return None
+    try:
+        raw = json.loads(meta_path.read_text())
+        return float(raw["val_accuracy"])
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+
+
+def maybe_save_best_val(
+    *,
+    output_dir: Path,
+    model,
+    tokenizer,
+    step: int,
+    accuracy: float,
+    best_acc: float | None,
+) -> float:
+    """Keep a non-rotated copy of the best mid-train val checkpoint (#9)."""
+    if best_acc is not None and accuracy <= best_acc:
+        return best_acc
+    best_dir = output_dir / "best_val"
+    if best_dir.exists():
+        shutil.rmtree(best_dir)
+    best_dir.mkdir(parents=True, exist_ok=True)
+    model.save_pretrained(best_dir)
+    tokenizer.save_pretrained(best_dir)
+    (best_dir / "best_val_meta.json").write_text(
+        json.dumps({"step": step, "val_accuracy": accuracy}, indent=2) + "\n"
+    )
+    print(
+        f"best_val → {best_dir} (step={step} acc={accuracy:.4f})",
+        flush=True,
+    )
+    return accuracy
+
+
+def warn_if_schedule_exhausted(*, lr: float, step: int, total_steps: int) -> None:
+    """Loud alarm when a run ends at ~zero LR (yesterday's failure mode)."""
+    if step < total_steps:
+        return
+    if lr > 1e-10:
+        return
+    print(
+        "WARNING: schedule exhausted — final train/lr≈0 at end of horizon. "
+        "This is a finished schedule, NOT a mid-run checkpoint. "
+        "Do not raise --max-steps and --resume the same run (GitHub #8). "
+        f"step={step}/{total_steps} lr={lr:.3e}",
+        flush=True,
+    )
+
+
 def maybe_init_wandb(
     *,
     enabled: bool,
@@ -423,18 +528,53 @@ def maybe_init_wandb(
 
 
 def configs_compatible(saved: dict[str, Any], now: dict[str, Any]) -> bool:
-    """Match train hyperparams; allow raising/removing max_steps for multi-day runs."""
-    a = dict(saved)
-    b = dict(now)
-    a_ms = a.pop("max_steps", None)
-    b_ms = b.pop("max_steps", None)
-    if a != b:
-        return False
-    if b_ms is None:
-        return True
-    if a_ms is None:
-        return True
-    return int(b_ms) >= int(a_ms)
+    """Train hyperparams must match exactly — including max_steps.
+
+    Changing the schedule horizon mid-run recomputes LambdaLR at the same
+    global step and can jump LR by orders of magnitude (see GitHub #8).
+    A longer/shorter horizon is a **new** experiment, not a resume.
+    """
+    return dict(saved) == dict(now)
+
+
+def current_optimizer_lr(optimizer: torch.optim.Optimizer) -> float:
+    return float(optimizer.param_groups[0]["lr"])
+
+
+def assert_lr_continuity(
+    *,
+    saved_lr: float | None,
+    current_lr: float,
+    tol: float = 0.05,
+) -> None:
+    """Refuse resume when LR jumps more than ``tol`` (relative)."""
+    if saved_lr is None:
+        return
+    denom = max(abs(float(saved_lr)), 1e-12)
+    jump = abs(float(current_lr) - float(saved_lr)) / denom
+    if jump > tol:
+        raise SystemExit(
+            f"Unsafe LR discontinuity on resume: {saved_lr} -> {current_lr} "
+            f"(jump={jump:.1%}, tol={tol:.0%}). "
+            "Refuse to continue — start a new run / W&B experiment if the "
+            "schedule horizon must change (GitHub #8)."
+        )
+
+
+def assert_schedule_horizon(
+    *,
+    saved_total_steps: int | None,
+    total_steps: int,
+) -> None:
+    if saved_total_steps is None:
+        return
+    if int(saved_total_steps) != int(total_steps):
+        raise SystemExit(
+            f"Unsafe schedule horizon change on resume: "
+            f"checkpoint total_steps={saved_total_steps} vs now={total_steps}. "
+            "Plan the full horizon before the first step; do not raise "
+            "--max-steps mid-run (GitHub #8)."
+        )
 
 
 def train(
@@ -459,9 +599,14 @@ def train(
     eval_data: Path | None,
     eval_every: int,
     eval_limit: int,
+    grad_accum: int = 1,
+    warmup_steps: int | None = None,
+    scheduler_name: str = "linear",
 ) -> None:
     random.seed(seed)
     torch.manual_seed(seed)
+    if grad_accum < 1:
+        raise SystemExit("--grad-accum must be >= 1")
 
     config = _config_fingerprint(
         data_path=data_path,
@@ -474,6 +619,9 @@ def train(
         seed=seed,
         tasks=tasks,
         stratified=stratified,
+        grad_accum=grad_accum,
+        warmup_steps=warmup_steps,
+        scheduler_name=scheduler_name,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -494,7 +642,9 @@ def train(
         if not configs_compatible(saved_cfg, config):
             raise SystemExit(
                 "resume config mismatch vs current CLI args; "
-                "refuse to continue (delete checkpoints/.../last to restart).\n"
+                "refuse to continue.\n"
+                "Note: --max-steps / schedule horizon must match the checkpoint "
+                "(GitHub #8). Extending the horizon is a new experiment.\n"
                 f"saved={saved_cfg}\nnow={config}"
             )
         model_source = str(resume_dir)
@@ -517,6 +667,11 @@ def train(
     )
     model.to(device)
     model.train()
+    # 12GB cards: activation memory spikes on long prompts otherwise OOM mid-run.
+    if hasattr(model, "gradient_checkpointing_enable"):
+        model.gradient_checkpointing_enable()
+        if hasattr(model, "config"):
+            model.config.use_cache = False
 
     dataset = ChoiceJsonlDataset(data_path, tasks=tasks)
     optimizer = torch.optim.AdamW(
@@ -524,14 +679,22 @@ def train(
         lr=lr,
     )
 
-    steps_per_epoch = (len(dataset) + batch_size - 1) // batch_size
+    # Optimizer-step horizon (grad_accum micro-batches share one scheduler step).
+    micro_per_epoch = (len(dataset) + batch_size - 1) // batch_size
+    steps_per_epoch = (micro_per_epoch + grad_accum - 1) // grad_accum
     total_steps = epochs * steps_per_epoch
     if max_steps is not None:
         total_steps = min(total_steps, max_steps)
-    scheduler = get_linear_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=max(1, total_steps // 10),
-        num_training_steps=max(1, total_steps),
+    warm = (
+        warmup_steps
+        if warmup_steps is not None
+        else max(1, total_steps // 10)
+    )
+    scheduler = build_scheduler(
+        optimizer=optimizer,
+        scheduler_name=scheduler_name,
+        warmup_steps=warm,
+        total_steps=total_steps,
     )
     scaler = torch.amp.GradScaler("cuda", enabled=use_fp16)
 
@@ -543,9 +706,24 @@ def train(
     wandb_id: str | None = None
 
     if state is not None:
+        assert_schedule_horizon(
+            saved_total_steps=state.get("total_steps"),
+            total_steps=total_steps,
+        )
         optimizer.load_state_dict(state["optimizer"])
         scheduler.load_state_dict(state["scheduler"])
         scaler.load_state_dict(state["scaler"])
+        # LambdaLR lambdas are closures over the *new* horizon; force the
+        # restored last_epoch through get_last_lr before the continuity check.
+        _ = scheduler.get_last_lr()
+        for group, restored_lr in zip(
+            optimizer.param_groups, scheduler.get_last_lr(), strict=True
+        ):
+            group["lr"] = restored_lr
+        assert_lr_continuity(
+            saved_lr=state.get("last_lr"),
+            current_lr=current_optimizer_lr(optimizer),
+        )
         step = int(state["step"])
         running = float(state["running"])
         start_epoch = int(state["epoch"])
@@ -559,12 +737,28 @@ def train(
         if state.get("py_rng") is not None:
             random.setstate(state["py_rng"])
         wandb_id = state.get("wandb_id")
+        # Early --max-steps stops used to finalize with epoch=epochs, batch=0,
+        # which makes range(start_epoch, epochs) empty. Repair from step count
+        # only when the schedule horizon is unchanged (same --max-steps).
+        if start_epoch >= epochs and step < total_steps:
+            start_epoch = step // max(steps_per_epoch, 1)
+            start_batch = step % max(steps_per_epoch, 1)
+            print(
+                f"resume cursor repaired → epoch={start_epoch} "
+                f"batch={start_batch} (from step={step})",
+                flush=True,
+            )
         if step >= total_steps:
             print(f"already complete at step={step}; exporting final weights only")
             output_dir.mkdir(parents=True, exist_ok=True)
             model.save_pretrained(output_dir)
             tokenizer.save_pretrained(output_dir)
             return
+        print(
+            f"resume lr={current_optimizer_lr(optimizer):.6e} "
+            f"(saved last_lr={state.get('last_lr')})",
+            flush=True,
+        )
 
     wb = maybe_init_wandb(
         enabled=wandb_enabled,
@@ -578,13 +772,26 @@ def train(
 
     print(
         f"train n={len(dataset)} stratified={stratified} "
-        f"batch={batch_size} epochs={epochs} steps≈{total_steps} "
+        f"batch={batch_size}x{grad_accum} sched={scheduler_name} "
+        f"warmup={warm} lr={lr} epochs={epochs} opt_steps≈{total_steps} "
         f"save_every={save_every} eval_every={eval_every} "
         f"resume={resume_dir is not None}",
         flush=True,
     )
 
     done = False
+    final_epoch = start_epoch
+    final_batch = start_batch
+    # Resume must restore running-best or a worse mid-val overwrites best_val (#9).
+    best_val_acc: float | None = load_best_val_acc(output_dir)
+    if best_val_acc is not None:
+        print(f"restored best_val_acc={best_val_acc:.4f} from disk", flush=True)
+    loss_ema: float | None = None
+    ema_beta = 2.0 / (100.0 + 1.0)  # ~100-step EMA
+    micro_in_accum = 0
+    accum_loss = 0.0
+
+    optimizer.zero_grad(set_to_none=True)
     for epoch in range(start_epoch, epochs):
         if stratified:
             index_batches = list(
@@ -612,7 +819,6 @@ def train(
             input_ids, attention_mask, label_ids = collate(
                 examples, tokenizer, max_length, device
             )
-            optimizer.zero_grad(set_to_none=True)
             with torch.amp.autocast(
                 device_type=device.type,
                 dtype=torch.bfloat16 if use_bf16 else torch.float16,
@@ -625,41 +831,72 @@ def train(
                     last_idx,
                 ].float()
                 loss = torch.nn.functional.cross_entropy(logits, label_ids)
+                loss = loss / grad_accum
 
             if not torch.isfinite(loss):
-                raise RuntimeError(f"non-finite loss at step {step + 1}: {loss.item()}")
+                raise RuntimeError(
+                    f"non-finite loss at opt_step {step + 1}: {loss.item()}"
+                )
 
             scaler.scale(loss).backward()
-            scaler.unscale_(optimizer)
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            scaler.step(optimizer)
-            scaler.update()
-            scheduler.step()
-
-            step += 1
-            running += float(loss.item())
-            if step % 50 == 0 or step == 1:
-                print(
-                    f"epoch={epoch + 1} step={step}/{total_steps} "
-                    f"loss={loss.item():.4f} avg={running / step:.4f}",
-                    flush=True,
-                )
-            if wb is not None:
-                wb.log(
-                    {
-                        "train/loss": float(loss.item()),
-                        "train/avg_loss": running / step,
-                        "train/epoch": epoch + 1,
-                        "train/lr": float(scheduler.get_last_lr()[0]),
-                    },
-                    step=step,
-                )
+            micro_in_accum += 1
+            accum_loss += float(loss.item()) * grad_accum
 
             next_batch = batch_i + 1
             next_epoch = epoch
             if next_batch >= len(index_batches):
                 next_batch = 0
                 next_epoch = epoch + 1
+            final_epoch = next_epoch
+            final_batch = next_batch
+
+            if micro_in_accum < grad_accum:
+                continue
+
+            scaler.unscale_(optimizer)
+            grad_norm = float(
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0).item()
+            )
+            scaler.step(optimizer)
+            scaler.update()
+            scheduler.step()
+            optimizer.zero_grad(set_to_none=True)
+
+            step += 1
+            raw_loss = accum_loss / grad_accum
+            running += raw_loss
+            loss_ema = (
+                raw_loss
+                if loss_ema is None
+                else (1.0 - ema_beta) * loss_ema + ema_beta * raw_loss
+            )
+            micro_in_accum = 0
+            accum_loss = 0.0
+            cur_lr = float(scheduler.get_last_lr()[0])
+
+            if step % 50 == 0 or step == 1:
+                print(
+                    f"epoch={epoch + 1} step={step}/{total_steps} "
+                    f"loss={raw_loss:.4f} ema={loss_ema:.4f} "
+                    f"avg={running / step:.4f} lr={cur_lr:.3e} "
+                    f"gnorm={grad_norm:.3f}",
+                    flush=True,
+                )
+            if wb is not None:
+                wb.log(
+                    {
+                        "train/loss_raw": raw_loss,
+                        "train/loss": raw_loss,
+                        "train/loss_ema_100": float(loss_ema),
+                        "train/avg_loss": running / step,
+                        "train/epoch": epoch + 1,
+                        "train/lr": cur_lr,
+                        "train/gradient_norm": grad_norm,
+                        "train/effective_batch_size": batch_size * grad_accum,
+                        "train/optimizer_step": step,
+                    },
+                    step=step,
+                )
 
             if save_every > 0 and step % save_every == 0:
                 save_rotating_checkpoint(
@@ -679,6 +916,8 @@ def train(
                     config=config,
                     wandb_id=wandb_id,
                 )
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
 
             if (
                 eval_data is not None
@@ -699,11 +938,23 @@ def train(
                     f"per_gym={val['per_gym']}",
                     flush=True,
                 )
+                best_val_acc = maybe_save_best_val(
+                    output_dir=output_dir,
+                    model=model,
+                    tokenizer=tokenizer,
+                    step=step,
+                    accuracy=float(val["accuracy"]),
+                    best_acc=best_val_acc,
+                )
+                if device.type == "cuda":
+                    torch.cuda.empty_cache()
                 if wb is not None:
                     payload: dict[str, float] = {
                         "val/accuracy": float(val["accuracy"]),
                         "val/n": float(val["n"]),
                     }
+                    if best_val_acc is not None:
+                        payload["val/best_accuracy"] = float(best_val_acc)
                     per_gym = val["per_gym"]
                     if isinstance(per_gym, dict):
                         for gym, acc in per_gym.items():
@@ -720,10 +971,12 @@ def train(
             break
         start_batch = 0
 
+    final_lr = current_optimizer_lr(optimizer)
+    warn_if_schedule_exhausted(lr=final_lr, step=step, total_steps=total_steps)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
-    # final resumable snapshot (rotated); inference weights also at out/
     save_rotating_checkpoint(
         output_dir=output_dir,
         step=step,
@@ -733,8 +986,8 @@ def train(
         optimizer=optimizer,
         scheduler=scheduler,
         scaler=scaler,
-        epoch=epochs,
-        batch_in_epoch=0,
+        epoch=final_epoch,
+        batch_in_epoch=final_batch,
         running=running,
         gym_hist=dict(gym_hist),
         total_steps=total_steps,
@@ -750,7 +1003,13 @@ def train(
         "tasks": sorted(tasks) if tasks is not None else ["all"],
         "stratified": stratified,
         "batch_size": batch_size,
+        "grad_accum": grad_accum,
+        "scheduler": scheduler_name,
+        "warmup_steps": warm,
+        "lr": lr,
+        "final_lr": final_lr,
         "final_avg_loss": running / max(step, 1),
+        "best_val_accuracy": best_val_acc,
         "samples_by_gym": dict(gym_hist),
         "save_every": save_every,
         "wandb_id": wandb_id,
@@ -759,7 +1018,14 @@ def train(
     print(f"saved adapter/model → {output_dir}")
     print("samples_by_gym:", dict(gym_hist))
     if wb is not None:
-        wb.summary.update({"final_avg_loss": meta["final_avg_loss"], "steps": step})
+        wb.summary.update(
+            {
+                "final_avg_loss": meta["final_avg_loss"],
+                "steps": step,
+                "final_lr": final_lr,
+                "best_val_accuracy": best_val_acc,
+            }
+        )
         wb.finish()
     reset_engine()
 
@@ -783,6 +1049,24 @@ def main() -> None:
     parser.add_argument("--max-length", type=int, default=1024)
     parser.add_argument("--max-steps", type=int, default=None)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument(
+        "--grad-accum",
+        type=int,
+        default=1,
+        help="Gradient accumulation steps (effective batch = batch-size × this)",
+    )
+    parser.add_argument(
+        "--warmup-steps",
+        type=int,
+        default=None,
+        help="Scheduler warmup optimizer steps (default: 10%% of horizon for linear)",
+    )
+    parser.add_argument(
+        "--scheduler",
+        default="linear",
+        choices=("linear", "cosine", "constant"),
+        help="LR schedule over the planned optimizer-step horizon",
+    )
     parser.add_argument(
         "--tasks",
         default="move,piece,destination",
@@ -867,6 +1151,9 @@ def main() -> None:
         eval_data=eval_data,
         eval_every=args.eval_every,
         eval_limit=args.eval_limit,
+        grad_accum=args.grad_accum,
+        warmup_steps=args.warmup_steps,
+        scheduler_name=args.scheduler,
     )
 
 

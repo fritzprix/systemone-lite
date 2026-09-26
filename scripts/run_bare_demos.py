@@ -25,7 +25,8 @@ MODELS = {
     "sft_model": str(ROOT / "checkpoints" / "systemone-mixed-sft"),  # Phase 1
     "spatial_v2": str(ROOT / "checkpoints" / "systemone-spatial-v2"),  # Phase 2 gate
     "spatial_v2b": str(ROOT / "checkpoints" / "systemone-spatial-v2b"),  # continual 20k
-    "spatial_v2_s1": str(ROOT / "checkpoints" / "systemone-spatial-v2-s1"),  # v2+cloze 20k
+    # Clean 20k weights only — do not use contaminated post-20k resume tree.
+    "spatial_v2_s1": str(ROOT / "checkpoints" / "systemone-spatial-v2-s1-pre-resume"),
 }
 
 
@@ -171,7 +172,7 @@ def main() -> None:
     report = {
         "protocol": {
             "hints": "removed (no CAPTURES/CHECK/develop/RECOMMENDED/BLOCKED/DEADLY tags in option text)",
-            "chess_options": "all legal moves up to 26 (FEN-seeded subsample); UCI-sorted aliases",
+            "chess_options": "legal moves capped at 6 (FEN-seeded subsample); UCI-sorted aliases; train schema is piece+destination",
             "solver_override": "disabled (model choice used; illegal → first legal only)",
             "self_play": "both colors controlled by the same model",
         },

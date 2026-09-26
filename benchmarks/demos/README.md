@@ -16,11 +16,11 @@ python scripts/run_bare_demos.py --only spatial_v2_s1
 | Rule | Detail |
 |---|---|
 | Option text | Bare labels only (`pawn a2->a3`, `Slide UP`, `Move LEFT`). No `CAPTURES` / `CHECK` / `develop` / `RECOMMENDED` / `BLOCKED` / `DEADLY`. |
-| Chess option set | **All** legal moves (cap 26 via FEN-seeded subsample). Aliases sorted by UCI. Previous demos used UCI-sort then `[:8]` (a-file bias). |
+| Chess option set | Demos: legal moves capped at 6 (or 2-stage piece/dest capped at 8). Train/eval schema is **piece + destination** (`staged_v1`), not uncapped move. |
 | Solver override | Disabled. Illegal model output → first legal action only (not BFS / `best_move_*`). |
 | Colors | Self-play: both sides are the **same** model. |
 | Hardware | Local NVIDIA RTX 3060, FP16 when available. |
-| Models | Base = `Qwen/Qwen2.5-0.5B-Instruct`. Phase 1 = `systemone-mixed-sft`. Phase 2 gate = `systemone-spatial-v2`. Continual attempt = `systemone-spatial-v2b` (20k from base, **not** resume from v2). S1 cloze continue = `systemone-spatial-v2-s1` (20k from v2 + cloze/diversity mix). |
+| Models | Base = `Qwen/Qwen2.5-0.5B-Instruct`. Phase 1 = `systemone-mixed-sft`. Phase 2 gate = `systemone-spatial-v2`. Continual attempt = `systemone-spatial-v2b` (20k from base, **not** resume from v2). S1 cloze continue = `systemone-spatial-v2-s1-pre-resume` (clean 20k from v2 + cloze; **not** the contaminated post-20k resume tree). |
 
 Machine-readable numbers: [`bare_face_report.json`](bare_face_report.json).  
 Held-out gates: [`../spatial_v2_report.json`](../spatial_v2_report.json) (v2) · [`../spatial_v2b_report.json`](../spatial_v2b_report.json) (v2b).

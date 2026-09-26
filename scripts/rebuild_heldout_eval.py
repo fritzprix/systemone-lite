@@ -223,6 +223,8 @@ def main() -> None:
         kept: list[dict] = []
 
         def _try_add(row: dict) -> bool:
+            if row.get("task") == "move":
+                return False  # staged_v1: piece+destination only
             row = ensure_gym(row, "chess")
             fp = fingerprint(row, mode="state_only")
             if fp in chess_excl:
@@ -231,7 +233,10 @@ def main() -> None:
             chess_excl.add(fp)
             return True
 
-        for row in load_jsonl(ROOT / "data" / "chess_eval_5k_2d.jsonl"):
+        staged_pool = ROOT / "data" / "chess_eval_staged.jsonl"
+        legacy_pool = ROOT / "data" / "chess_eval_5k_2d.jsonl"
+        pool_path = staged_pool if staged_pool.exists() else legacy_pool
+        for row in load_jsonl(pool_path):
             _try_add(row)
             if len(kept) >= n_chess:
                 break
@@ -258,6 +263,7 @@ def main() -> None:
                     best_move=best,
                     source="heuristic",
                     include_stages=True,
+                    include_move=False,
                 ):
                     if len(kept) >= n_chess:
                         break
@@ -266,7 +272,7 @@ def main() -> None:
         if len(kept) < n_chess:
             raise SystemExit(f"chess eval: only {len(kept)}/{n_chess} disjoint FENs")
         add_eval("chess", kept[:n_chess])
-        print(f"    ✓ chess: {n_chess} disjoint (pool+synth)", flush=True)
+        print(f"    ✓ chess: {n_chess} disjoint staged (pool+synth)", flush=True)
 
     # Ticket / allocator — regenerate with state rejection
     for gym, gen_ep in [

@@ -148,6 +148,18 @@ def main() -> None:
     parser.add_argument("--eval-spatial-per-game", type=int, default=500, help="Eval spatial samples per game")
     parser.add_argument("--train-out", type=Path, default=ROOT / "data" / "phase2_train_200k.jsonl")
     parser.add_argument("--eval-out", type=Path, default=ROOT / "data" / "phase2_eval_4k.jsonl")
+    parser.add_argument(
+        "--chess-source",
+        type=Path,
+        default=ROOT / "data" / "chess_train_staged.jsonl",
+        help="Staged piece+destination chess JSONL (default: chess_train_staged.jsonl)",
+    )
+    parser.add_argument(
+        "--chess-eval-source",
+        type=Path,
+        default=ROOT / "data" / "chess_eval_staged.jsonl",
+        help="Staged chess eval JSONL (default: chess_eval_staged.jsonl)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -193,7 +205,20 @@ def main() -> None:
     # 3. Load & Scale General NLP + Chess
     print(f"\n=== 3. Loading General NLP & Chess 2D Datasets ===")
     general_raw = [ensure_gym(r, str((r.get("meta") or {}).get("gym") or "general")) for r in load_jsonl(ROOT / "data" / "general_train.jsonl")]
-    chess_raw = [ensure_gym(r, "chess") for r in load_jsonl(ROOT / "data" / "chess_train_5k_2d.jsonl")]
+    chess_path = args.chess_source
+    if not chess_path.exists():
+        raise SystemExit(
+            f"missing chess source {chess_path}; "
+            "build with: python scripts/chess_distill_dataset.py "
+            "--refresh-file data/chess_train_5k_2d.jsonl "
+            "--out data/chess_train_staged.jsonl"
+        )
+    chess_raw = [ensure_gym(r, "chess") for r in load_jsonl(chess_path)]
+    if any(r.get("task") == "move" for r in chess_raw):
+        raise SystemExit(
+            f"{chess_path} still contains uncapped task=move rows; "
+            "use staged piece+destination distill (chess_train_staged.jsonl)"
+        )
 
     general_train = upsample(general_raw, args.general_target, rng)
     chess_train = upsample(chess_raw, args.chess_target, rng)
@@ -210,7 +235,14 @@ def main() -> None:
     # 5. Assemble Eval Dataset
     print(f"\n=== 5. Assembling Final Phase 2 Eval Dataset ===")
     general_eval = [ensure_gym(r, str((r.get("meta") or {}).get("gym") or "general")) for r in load_jsonl(ROOT / "data" / "general_eval.jsonl")[:1000]]
-    chess_eval = [ensure_gym(r, "chess") for r in load_jsonl(ROOT / "data" / "chess_eval_5k_2d.jsonl")[:1000]]
+    chess_eval_path = args.chess_eval_source
+    if not chess_eval_path.exists():
+        raise SystemExit(f"missing chess eval source {chess_eval_path}")
+    chess_eval = [
+        ensure_gym(r, "chess")
+        for r in load_jsonl(chess_eval_path)
+        if r.get("task") != "move"
+    ][:1000]
     phase2_eval = spatial_eval_samples + chess_eval + general_eval
     rng.shuffle(phase2_eval)
 

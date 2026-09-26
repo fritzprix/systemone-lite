@@ -1,0 +1,148 @@
+{
+  "model": "checkpoints/systemone-action-v2-qwen/best_val",
+  "data": "data/phase2_eval_4k.jsonl",
+  "n": 800,
+  "accuracy": 0.63875,
+  "shuffle_aliases": true,
+  "seed": 0,
+  "per_gym": {
+    "cellular_automata": {
+      "n": 71,
+      "accuracy": 0.5070422535211268
+    },
+    "chess": {
+      "n": 87,
+      "accuracy": 0.4482758620689655
+    },
+    "connect4": {
+      "n": 86,
+      "accuracy": 0.4883720930232558
+    },
+    "debate_judge": {
+      "n": 61,
+      "accuracy": 0.9180327868852459
+    },
+    "game2048": {
+      "n": 84,
+      "accuracy": 0.40476190476190477
+    },
+    "gridworld": {
+      "n": 96,
+      "accuracy": 0.4583333333333333
+    },
+    "nlp_cloze": {
+      "n": 62,
+      "accuracy": 0.967741935483871
+    },
+    "resource_allocator": {
+      "n": 59,
+      "accuracy": 0.9830508474576272
+    },
+    "sokoban": {
+      "n": 70,
+      "accuracy": 0.38571428571428573
+    },
+    "ticket_dungeon": {
+      "n": 54,
+      "accuracy": 1.0
+    },
+    "word_games": {
+      "n": 70,
+      "accuracy": 0.8714285714285714
+    }
+  },
+  "per_task": {
+    "alloc.fund_next": {
+      "n": 59,
+      "accuracy": 0.9830508474576272
+    },
+    "ca.cell_alive": {
+      "n": 29,
+      "accuracy": 0.4827586206896552
+    },
+    "ca.pop_change": {
+      "n": 20,
+      "accuracy": 0.6
+    },
+    "ca.pop_parity": {
+      "n": 22,
+      "accuracy": 0.45454545454545453
+    },
+    "connect4.drop": {
+      "n": 56,
+      "accuracy": 0.35714285714285715
+    },
+    "connect4.threat_alert": {
+      "n": 16,
+      "accuracy": 1.0
+    },
+    "connect4.win_now_alert": {
+      "n": 14,
+      "accuracy": 0.42857142857142855
+    },
+    "debate.winner": {
+      "n": 61,
+      "accuracy": 0.9180327868852459
+    },
+    "destination": {
+      "n": 45,
+      "accuracy": 0.5333333333333333
+    },
+    "game2048.overflow_alert": {
+      "n": 2,
+      "accuracy": 0.5
+    },
+    "game2048.slide": {
+      "n": 82,
+      "accuracy": 0.4024390243902439
+    },
+    "gridworld.hazard_alert": {
+      "n": 34,
+      "accuracy": 0.6176470588235294
+    },
+    "gridworld.move": {
+      "n": 62,
+      "accuracy": 0.3709677419354839
+    },
+    "nlp.cloze": {
+      "n": 62,
+      "accuracy": 0.967741935483871
+    },
+    "piece": {
+      "n": 42,
+      "accuracy": 0.35714285714285715
+    },
+    "sokoban.deadlock_alert": {
+      "n": 23,
+      "accuracy": 0.4782608695652174
+    },
+    "sokoban.direction": {
+      "n": 47,
+      "accuracy": 0.3404255319148936
+    },
+    "ticket.route": {
+      "n": 54,
+      "accuracy": 1.0
+    },
+    "word.anagram": {
+      "n": 12,
+      "accuracy": 0.8333333333333334
+    },
+    "word.definition": {
+      "n": 14,
+      "accuracy": 0.9285714285714286
+    },
+    "word.one_edit": {
+      "n": 15,
+      "accuracy": 0.9333333333333333
+    },
+    "word.plural": {
+      "n": 14,
+      "accuracy": 0.9285714285714286
+    },
+    "word.vowel_count": {
+      "n": 15,
+      "accuracy": 0.7333333333333333
+    }
+  }
+}

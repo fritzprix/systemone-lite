@@ -4,7 +4,7 @@
 Bare-face mode (no tactical keyword hints in option text):
   - 8x8 2D text grid + FEN / side-to-move / material facts only
   - Neutral move labels: SAN + UCI + piece from→to (no CAPTURES/CHECK/develop tags)
-  - All legal moves offered (capped at 26 via FEN-seeded sample; UCI-sorted aliases)
+  - Legal moves offered with hard cap of 6 (gold-capable FEN-seeded subsample; UCI-sorted aliases)
   - Multi-question evaluation: move / position_eval / threat_alert
   - Optional GIF recording (--gif) and stub mode (--stub)
 """
@@ -26,7 +26,7 @@ from PIL import Image, ImageDraw, ImageFont
 from systemone_lite import SystemOneClient, choice, noul, score
 from systemone_lite.stub import StubEngine
 
-MAX_MOVE_OPTIONS = 26
+MAX_MOVE_OPTIONS = 6  # staged_v1 move cap (demos only; train uses piece+destination)
 
 # ANSI Colors
 CLR_RESET = "\033[0m"

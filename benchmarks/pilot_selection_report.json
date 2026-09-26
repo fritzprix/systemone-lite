@@ -1,0 +1,29 @@
+{
+  "winning_trial": "Trial-C (1e-5)",
+  "winning_accuracy": 0.5325,
+  "winning_step": 10000,
+  "winning_dir": "checkpoints/lr-pilot-C-qwen-1e5/best_val",
+  "all_trials": [
+    {
+      "name": "Trial-A (2e-6)",
+      "dir": "checkpoints/lr-pilot-A-qwen-2e6",
+      "best_val_dir": "checkpoints/lr-pilot-A-qwen-2e6/best_val",
+      "best_val_accuracy": 0.4175,
+      "best_step": 7500
+    },
+    {
+      "name": "Trial-B (5e-6)",
+      "dir": "checkpoints/lr-pilot-B-qwen-5e6",
+      "best_val_dir": "checkpoints/lr-pilot-B-qwen-5e6/best_val",
+      "best_val_accuracy": 0.51125,
+      "best_step": 10000
+    },
+    {
+      "name": "Trial-C (1e-5)",
+      "dir": "checkpoints/lr-pilot-C-qwen-1e5",
+      "best_val_dir": "checkpoints/lr-pilot-C-qwen-1e5/best_val",
+      "best_val_accuracy": 0.5325,
+      "best_step": 10000
+    }
+  ]
+}

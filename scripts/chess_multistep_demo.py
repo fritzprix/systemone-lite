@@ -2,8 +2,8 @@
 """Multi-step Autonomous Chess Demo powered by systemone-lite.
 
 Bare-face 2-stage pipeline (no tactical keyword hints):
-  Stage 1: select which piece to move (all origins, capped at 26).
-  Stage 2: select destination with bare UCI labels (no capture/check/develop tags).
+  Stage 1: select which piece to move (origins capped at 8).
+  Stage 2: select destination with bare UCI labels (dests capped at 8).
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from systemone_lite.chess_data import (
 from systemone_lite.infer import DEFAULT_MODEL_ID
 from systemone_lite.stub import StubEngine
 
-MAX_OPTIONS = 26
+MAX_OPTIONS = 8  # staged_v1 piece/destination fan-out cap
 
 
 def _fen_seed(fen: str) -> int:

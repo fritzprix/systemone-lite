@@ -57,6 +57,30 @@ def maybe_subset_options(
     return keep
 
 
+def cap_options(
+    options: dict[str, str],
+    label_key: str,
+    *,
+    max_n: int,
+    rng: random.Random,
+) -> dict[str, str]:
+    """Keep ``label_key`` plus random distractors, hard-capped at ``max_n``."""
+    if label_key not in options:
+        raise KeyError(label_key)
+    if max_n < 1:
+        raise ValueError("max_n must be >= 1")
+    if len(options) <= max_n:
+        return dict(options)
+    others = [k for k in options if k != label_key]
+    rng.shuffle(others)
+    keep_keys = [label_key] + others[: max_n - 1]
+    rng.shuffle(keep_keys)
+    return {k: options[k] for k in keep_keys}
+
+
+TASK_SCHEMA_ACTION_V2 = "action_v2"
+
+
 def choice_sample(
     *,
     task: str,
@@ -92,6 +116,7 @@ def choice_sample(
             "gym": meta.get("gym", "general"),
             "hard": hard,
             "n_options": len(ordered),
+            "task_schema": meta.get("task_schema", "choice"),
         },
     )
 

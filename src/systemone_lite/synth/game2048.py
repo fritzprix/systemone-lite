@@ -9,7 +9,21 @@ from dataclasses import dataclass
 from typing import Any
 
 from systemone_lite.chess_data import DistillSample, alias_criteria
-from systemone_lite.synth.common import choice_sample
+from systemone_lite.synth.common import TASK_SCHEMA_ACTION_V2, choice_sample
+from systemone_lite.synth.augmentation import FLIP_H_ACTION, ROT90_ACTION
+
+
+def _map_action(action: str, rot_k: int, flip_h: bool) -> str:
+    a = action
+    for _ in range(rot_k % 4):
+        a = ROT90_ACTION[a]
+    if flip_h:
+        a = FLIP_H_ACTION[a]
+    return a
+
+
+def _map_action_set(actions: list[str], rot_k: int, flip_h: bool) -> list[str]:
+    return [_map_action(a, rot_k, flip_h) for a in actions]
 
 
 @dataclass
@@ -181,7 +195,11 @@ def _overflow_alert(
     )
     key_to_alias = {v: k for k, v in alias_map.items()}
     lbl_key = "yes" if is_danger else "no"
-    meta: dict[str, Any] = {"gym": "game2048", "schema": "noul"}
+    meta: dict[str, Any] = {
+        "gym": "game2048",
+        "schema": "noul",
+        "task_schema": TASK_SCHEMA_ACTION_V2,
+    }
     if extra_meta:
         meta.update(extra_meta)
     return DistillSample(
@@ -206,7 +224,7 @@ def generate_2048_samples(
     samples: list[DistillSample] = []
     alert_yes = 0
     alert_no = 0
-    yes_budget = max(1, n_samples // 5)
+    yes_budget = max(1, n_samples // 3)
 
     while len(samples) < n_samples:
         # Top-up near-full boards for overflow-yes (no numeric empty_count in state)
@@ -271,15 +289,20 @@ def generate_2048_samples(
                 "legend": "Numbers represent tile values; '.' represents an empty cell.",
                 "highest_tile": aug_board.max_tile,
             }
-            options = {d: f"Slide {d}" for d in ["UP", "DOWN", "LEFT", "RIGHT"]}
+            aug_legal = set(
+                _map_action_set(list(legal.keys()), rot_k, flip_h)
+            )
+            if aug_best_d is not None:
+                aug_legal.add(aug_best_d)
+            options = {d: f"Slide {d}" for d in sorted(aug_legal)}
 
-            if rng.random() < 0.75 and aug_best_d is not None:
+            if rng.random() < 0.55 and aug_best_d is not None and aug_best_d in options:
                 s = choice_sample(
                     task="game2048.slide",
                     state=state,
                     instructions=(
                         "Inspect the 4x4 2048 grid. "
-                        "Choose the slide direction: UP, DOWN, LEFT, RIGHT."
+                        "Choose among the listed legal slide directions."
                     ),
                     options=options,
                     label_key=aug_best_d,
@@ -289,6 +312,8 @@ def generate_2048_samples(
                         "aug_rot_k": rot_k,
                         "aug_flip_h": flip_h,
                         "empty_cells_count": empty_count,
+                        "task_schema": TASK_SCHEMA_ACTION_V2,
+                        "legal_dirs": sorted(aug_legal),
                     },
                     rng=rng,
                     hard=hard,
@@ -309,7 +334,7 @@ def generate_2048_samples(
                 (not is_danger)
                 and alert_no <= alert_yes
                 and len(samples) < n_samples
-                and rng.random() < 0.35
+                and rng.random() < 0.50
             ):
                 samples.append(
                     _overflow_alert(

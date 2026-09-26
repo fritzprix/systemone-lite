@@ -37,7 +37,13 @@ Current local mix (not yet re-uploaded to Hub at note time):
 |---|---|---:|---|---|
 | `spatial-v2-s1` | `spatial-v2` | 20 000 | phase2 240.8k (w/ cloze) | [bs62qs8x](https://wandb.ai/doodream/systemone-lite/runs/bs62qs8x) |
 
-Full epoch ≈ 60.2k steps; 20k ≈ ⅓ epoch. Resume to 60.2k is supported via `--resume --max-steps 60200`.
+Full epoch ≈ 60.2k steps; 20k ≈ ⅓ epoch.
+
+**Do not** resume the same W&B run with a raised `--max-steps`. The 20k→60.2k
+continue fractured the LR schedule (~190× jump) — see [#8](https://github.com/fritzprix/systemone-lite/issues/8).
+Clean 20k weights: `checkpoints/systemone-spatial-v2-s1-pre-resume/` (Hub
+`dwidlee/systemone-lite-0.5b`). Contaminated mid-resume steps are under
+`systemone-spatial-v2-s1/step-5*` — do not publish. Next: LR pilot [#12](https://github.com/fritzprix/systemone-lite/issues/12).
 
 ## JevBench (local, T=1.0, 231 tasks)
 

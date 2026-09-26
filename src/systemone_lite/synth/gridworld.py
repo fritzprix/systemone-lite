@@ -7,7 +7,17 @@ import random
 from dataclasses import dataclass
 
 from systemone_lite.chess_data import DistillSample, alias_criteria
-from systemone_lite.synth.common import choice_sample
+from systemone_lite.synth.augmentation import FLIP_H_ACTION, ROT90_ACTION
+from systemone_lite.synth.common import TASK_SCHEMA_ACTION_V2, choice_sample
+
+
+def _map_action(action: str, rot_k: int, flip_h: bool) -> str:
+    a = action
+    for _ in range(rot_k % 4):
+        a = ROT90_ACTION[a]
+    if flip_h:
+        a = FLIP_H_ACTION[a]
+    return a
 
 DIRECTIONS = {
     "UP": (-1, 0),
@@ -55,6 +65,19 @@ class GridWorldMap:
             if (pr + dr, pc + dc) in self.hazards:
                 return True
         return False
+
+    def get_legal_moves(self) -> list[str]:
+        """Safe floor moves (no wall / hazard)."""
+        pr, pc = self.player
+        legal: list[str] = []
+        for dname, (dr, dc) in DIRECTIONS.items():
+            nr, nc = pr + dr, pc + dc
+            if not (0 <= nr < self.height and 0 <= nc < self.width):
+                continue
+            if self.grid[nr][nc] == "#" or (nr, nc) in self.hazards:
+                continue
+            legal.append(dname)
+        return legal
 
     def find_shortest_safe_path(self) -> list[str] | None:
         """BFS shortest safe path from player to goal avoiding walls and hazards."""
@@ -156,7 +179,7 @@ def _alert_sample(state: dict, near_hazard: bool) -> DistillSample:
         criteria=criteria,
         label_alias=key_to_alias[lbl_key],
         label_key=lbl_key,
-        meta={"gym": "gridworld", "schema": "noul"},
+        meta={"gym": "gridworld", "schema": "noul", "task_schema": TASK_SCHEMA_ACTION_V2},
     )
 
 
@@ -211,19 +234,26 @@ def generate_gridworld_samples(
             aug_matrix, legend, role_syms = maybe_remap_gridworld_map(rng, aug_matrix)
             aug_grid_map = "\n" + "\n".join("".join(r) for r in aug_matrix) + "\n"
 
-            options = {d: f"Move {d}" for d in DIRECTIONS}
+            legal = curr_map.get_legal_moves()
+            aug_legal = {_map_action(d, rot_k, flip_h) for d in legal}
+            if aug_best_action:
+                aug_legal.add(aug_best_action)
+            options = {d: f"Move {d}" for d in sorted(aug_legal)}
             state = {
                 "grid_map": aug_grid_map,
                 "legend": legend,
             }
 
-            if rng.random() < 0.70:
+            if (
+                rng.random() < 0.55
+                and aug_best_action in options
+            ):
                 s = choice_sample(
                     task="gridworld.move",
                     state=state,
                     instructions=(
                         "Inspect the 2D GridWorld map. "
-                        "Choose the move direction: UP, DOWN, LEFT, RIGHT."
+                        "Choose among the listed legal move directions."
                     ),
                     options=options,
                     label_key=aug_best_action,
@@ -234,6 +264,8 @@ def generate_gridworld_samples(
                         "aug_flip_h": flip_h,
                         "spawn": "random",
                         "symbol_remap": role_syms,
+                        "task_schema": TASK_SCHEMA_ACTION_V2,
+                        "legal_dirs": sorted(aug_legal),
                     },
                     rng=rng,
                     hard=hard,
@@ -246,9 +278,9 @@ def generate_gridworld_samples(
             if near and alert_yes <= alert_no:
                 want_alert = True
             elif (not near) and alert_no <= alert_yes:
-                want_alert = rng.random() < 0.55
+                want_alert = rng.random() < 0.65
             elif near:
-                want_alert = rng.random() < 0.25
+                want_alert = rng.random() < 0.35
             if want_alert and len(samples) < n_samples:
                 alert = _alert_sample(state, near)
                 alert.meta["symbol_remap"] = role_syms

@@ -60,7 +60,7 @@ def main() -> None:
     parser.add_argument(
         "--chess",
         type=Path,
-        default=ROOT / "data" / "chess_train_5k_2d.jsonl",
+        default=ROOT / "data" / "chess_train_staged.jsonl",
     )
     parser.add_argument(
         "--out",

@@ -7,7 +7,9 @@ import random
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
+
+T = TypeVar("T")
 
 import chess
 import chess.engine
@@ -231,6 +233,26 @@ DEST_INSTRUCTIONS = (
     "Reply with the option letter."
 )
 
+TASK_SCHEMA_STAGED_V1 = "staged_v1"
+
+
+def _cap_options(
+    items: list[T],
+    *,
+    keep: T,
+    max_n: int,
+    rng: random.Random | None = None,
+) -> list[T]:
+    """Keep ``keep`` plus a random subset of others, capped at ``max_n``."""
+    if max_n < 1:
+        raise ValueError("max_n must be >= 1")
+    rng = rng or random
+    others = [x for x in items if x != keep]
+    rng.shuffle(others)
+    capped = [keep] + others[: max(0, max_n - 1)]
+    rng.shuffle(capped)
+    return capped
+
 
 def build_samples_for_position(
     board: chess.Board,
@@ -238,10 +260,20 @@ def build_samples_for_position(
     engine_path: str | None = None,
     movetime_ms: int = 50,
     include_stages: bool = True,
+    include_move: bool = False,
+    max_move_options: int = 6,
+    max_piece_options: int = 8,
+    max_dest_options: int = 8,
     engine: chess.engine.SimpleEngine | None = None,
     best_move: chess.Move | None = None,
     source: str = "stockfish",
 ) -> list[DistillSample]:
+    """Build choice samples for one position.
+
+    Default schema (``staged_v1``): ``piece`` + ``destination`` only, with
+    option fan-out caps. Full-legal ``move`` is opt-in via ``include_move`` and
+    is hard-capped (default 6), never the uncapped 26-way list.
+    """
     moves = list(board.legal_moves)
     if not moves:
         return []
@@ -257,39 +289,41 @@ def build_samples_for_position(
         best = best_move
     state = board_state(board)
     samples: list[DistillSample] = []
+    schema_meta = {"task_schema": TASK_SCHEMA_STAGED_V1}
 
-    # Cap move list to 26 aliases.
-    if len(moves) > 26:
-        # Keep best + random subset of others.
-        others = [m for m in moves if m != best]
-        random.shuffle(others)
-        moves = [best] + others[:25]
-    random.shuffle(moves)
-
-    move_opts = {m.uci(): describe_move(board, m) for m in moves}
-    criteria, alias_to_key = alias_criteria(move_opts)
-    key_to_alias = {v: k for k, v in alias_to_key.items()}
-    if best.uci() not in key_to_alias:
-        return samples
-    samples.append(
-        DistillSample(
-            task="move",
-            state=state,
-            instructions=MOVE_INSTRUCTIONS,
-            criteria=criteria,
-            label_alias=key_to_alias[best.uci()],
-            label_key=best.uci(),
-                meta={"label_source": source, "n_options": len(criteria), "gym": "chess"},
+    if include_move:
+        capped_moves = _cap_options(
+            moves, keep=best, max_n=max_move_options
         )
-    )
+        move_opts = {m.uci(): describe_move(board, m) for m in capped_moves}
+        criteria, alias_to_key = alias_criteria(move_opts)
+        key_to_alias = {v: k for k, v in alias_to_key.items()}
+        if best.uci() in key_to_alias:
+            samples.append(
+                DistillSample(
+                    task="move",
+                    state=state,
+                    instructions=MOVE_INSTRUCTIONS,
+                    criteria=criteria,
+                    label_alias=key_to_alias[best.uci()],
+                    label_key=best.uci(),
+                    meta={
+                        "label_source": source,
+                        "n_options": len(criteria),
+                        "gym": "chess",
+                        **schema_meta,
+                    },
+                )
+            )
 
     if not include_stages:
         return samples
 
     origin = chess.square_name(best.from_square)
     grouped = legal_by_origin(board)
-    origin_keys = list(grouped.keys())
-    random.shuffle(origin_keys)
+    origin_keys = _cap_options(
+        list(grouped.keys()), keep=origin, max_n=max_piece_options
+    )
     origin_opts = {sq: describe_piece(board, sq) for sq in origin_keys}
     o_crit, o_alias = alias_criteria(origin_opts)
     o_key_to_alias = {v: k for k, v in o_alias.items()}
@@ -302,12 +336,19 @@ def build_samples_for_position(
                 criteria=o_crit,
                 label_alias=o_key_to_alias[origin],
                 label_key=origin,
-                meta={"label_source": source, "best_uci": best.uci(), "gym": "chess"},
+                meta={
+                    "label_source": source,
+                    "best_uci": best.uci(),
+                    "n_options": len(o_crit),
+                    "gym": "chess",
+                    **schema_meta,
+                },
             )
         )
 
-    dest_moves = list(grouped[origin])
-    random.shuffle(dest_moves)
+    dest_moves = _cap_options(
+        list(grouped[origin]), keep=best, max_n=max_dest_options
+    )
     dest_opts = {m.uci(): describe_move(board, m) for m in dest_moves}
     d_crit, d_alias = alias_criteria(dest_opts)
     d_key_to_alias = {v: k for k, v in d_alias.items()}
@@ -323,7 +364,13 @@ def build_samples_for_position(
                 criteria=d_crit,
                 label_alias=d_key_to_alias[best.uci()],
                 label_key=best.uci(),
-                meta={"label_source": source, "selected_piece": origin, "gym": "chess"},
+                meta={
+                    "label_source": source,
+                    "selected_piece": origin,
+                    "n_options": len(d_crit),
+                    "gym": "chess",
+                    **schema_meta,
+                },
             )
         )
 
