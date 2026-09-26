@@ -6,8 +6,8 @@ Regenerate:
 
 ```bash
 python scripts/run_bare_demos.py                 # all tags
-python scripts/run_bare_demos.py --only spatial_v2_s1
-# → benchmarks/demos/{base_model,sft_model,spatial_v2,spatial_v2b,spatial_v2_s1}/*.gif
+python scripts/run_bare_demos.py --only action_v2_qwen
+# → benchmarks/demos/{base_model,sft_model,spatial_v2,spatial_v2b,spatial_v2_s1,staged_c_init,action_v2_qwen}/*.gif
 # → benchmarks/demos/bare_face_report.json
 ```
 
@@ -34,6 +34,8 @@ Held-out gates: [`../spatial_v2_report.json`](../spatial_v2_report.json) (v2) ·
 | [`spatial_v2/`](spatial_v2/) | Phase 2 spatial SFT (51.2k, gate PASS on prior eval) |
 | [`spatial_v2b/`](spatial_v2b/) | 20k cold-start attempt (gate FAIL on current eval) |
 | [`spatial_v2_s1/`](spatial_v2_s1/) | v2 + cloze/diversity continue (20k); JevBench Acc 49.8% |
+| [`staged_c_init/`](staged_c_init/) | staged chess continue from Trial C best_val |
+| [`action_v2_qwen/`](action_v2_qwen/) | **current Hub** — staged chess + action_v2 spatial (10k) |
 
 Each folder has: `chess_proper.gif`, `chess_multistep.gif`, `game2048.gif`, `gridworld.gif`, `sokoban.gif`, `connect4.gif`.
 
